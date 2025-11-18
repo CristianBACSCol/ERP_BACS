@@ -38,11 +38,17 @@ login_manager.init_app(app)
 login_manager.login_view = 'login'
 login_manager.login_message = 'Por favor inicia sesión para acceder a esta página.'
 
-# Crear directorio de uploads si no existe
-os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+# Crear directorio de uploads si no existe (solo si es necesario, no crítico en serverless)
+try:
+    os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+except Exception as e:
+    print(f"Warning: No se pudo crear directorio uploads: {e}")
 
-# Crear directorio de files si no existe
-os.makedirs('files', exist_ok=True)
+# Crear directorio de files si no existe (solo si es necesario, no crítico en serverless)
+try:
+    os.makedirs('files', exist_ok=True)
+except Exception as e:
+    print(f"Warning: No se pudo crear directorio files: {e}")
 
 # Ruta para servir archivos estáticos desde la carpeta files
 @app.route('/files/<filename>')
