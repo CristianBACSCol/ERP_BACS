@@ -59,11 +59,17 @@ R2_BUCKET_NAME=erp-bacs
 
 En la configuración del proyecto en Vercel:
 
-1. **Framework Preset**: Deja en blanco o selecciona "Other"
-2. **Root Directory**: `.` (raíz del proyecto)
-3. **Build Command**: (dejar vacío o no configurar)
-4. **Output Directory**: (dejar vacío)
-5. **Install Command**: `pip install -r requirements.txt`
+1. **Framework Preset**: ⚠️ **Selecciona "Other" o déjalo en blanco** (NO selecciones "Flask")
+   - Vercel no tiene un preset oficial para Flask
+   - Flask se despliega como serverless functions usando la configuración en `vercel.json`
+2. **Node.js Version**: Configúralo en **20.x** (requerido para Python 3.11+)
+   - Aunque tu app es Python, Vercel requiere Node.js configurado
+   - Ve a Settings → General → Node.js Version
+   - Selecciona "20.x" o superior
+3. **Root Directory**: `.` (raíz del proyecto)
+4. **Build Command**: (dejar vacío o no configurar)
+5. **Output Directory**: (dejar vacío)
+6. **Install Command**: `pip install -r requirements.txt`
 
 ### Paso 4: Desplegar
 
