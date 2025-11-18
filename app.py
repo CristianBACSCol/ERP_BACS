@@ -15,6 +15,7 @@ from PIL import Image as PILImage
 import io
 
 from config import Config
+from r2_storage import upload_file_to_r2, download_file_from_r2, download_to_temp_file, file_exists_in_r2, get_file_url_from_r2
 
 
 app = Flask(__name__)
@@ -369,12 +370,18 @@ def nueva_incidencia():
         for i, archivo in enumerate(archivos):
             if archivo and archivo.filename:
                 filename = secure_filename(archivo.filename)
-                archivo.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-                nombres_archivos.append(filename)
+                # Generar nombre único con timestamp
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                file_extension = os.path.splitext(filename)[1] or ''
+                unique_filename = f'{timestamp}_{i}{file_extension}'
                 
-                # Obtener título correspondiente o usar nombre del archivo
-                titulo = titulos_imagenes[i] if i < len(titulos_imagenes) and titulos_imagenes[i] else filename
-                titulos_finales.append(titulo)
+                # Subir a R2: Incidencias/nombre_archivo
+                r2_path = f'Incidencias/{unique_filename}'
+                if upload_file_to_r2(archivo, r2_path, content_type=archivo.content_type):
+                    nombres_archivos.append(unique_filename)
+                    # Obtener título correspondiente o usar nombre del archivo
+                    titulo = titulos_imagenes[i] if i < len(titulos_imagenes) and titulos_imagenes[i] else filename
+                    titulos_finales.append(titulo)
         
         # Procesar configuración de imágenes
         if nombres_archivos:
@@ -469,12 +476,18 @@ def editar_incidencia(id):
             for i, archivo in enumerate(archivos):
                 if archivo and archivo.filename:
                     filename = secure_filename(archivo.filename)
-                    archivo.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-                    nombres_archivos.append(filename)
+                    # Generar nombre único con timestamp
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    file_extension = os.path.splitext(filename)[1] or ''
+                    unique_filename = f'{timestamp}_{i}{file_extension}'
                     
-                    # Obtener título correspondiente o usar nombre del archivo
-                    titulo = titulos_imagenes[i] if i < len(titulos_imagenes) and titulos_imagenes[i] else filename
-                    titulos_finales.append(titulo)
+                    # Subir a R2: Incidencias/nombre_archivo
+                    r2_path = f'Incidencias/{unique_filename}'
+                    if upload_file_to_r2(archivo, r2_path, content_type=archivo.content_type):
+                        nombres_archivos.append(unique_filename)
+                        # Obtener título correspondiente o usar nombre del archivo
+                        titulo = titulos_imagenes[i] if i < len(titulos_imagenes) and titulos_imagenes[i] else filename
+                        titulos_finales.append(titulo)
             
             if nombres_archivos:
                 incidencia.adjuntos = ','.join(nombres_archivos)
@@ -1201,8 +1214,11 @@ def generar_pdf_profesional(incidencias, agrupacion='estado'):
             if incidencia.adjuntos:
                 archivos = incidencia.adjuntos.split(',')
                 for archivo in archivos:
-                    archivo_path = os.path.join(app.config['UPLOAD_FOLDER'], archivo.strip())
-                    if os.path.exists(archivo_path):
+                    # Buscar en R2: Incidencias/nombre_archivo
+                    r2_path = f'Incidencias/{archivo.strip()}'
+                    archivo_path = download_to_temp_file(r2_path)
+                    
+                    if archivo_path and os.path.exists(archivo_path):
                         try:
                             # Verificar si es una imagen
                             with PILImage.open(archivo_path) as img:
@@ -1219,7 +1235,9 @@ def generar_pdf_profesional(incidencias, agrupacion='estado'):
                                     new_height = img.height
                                 
                                 # Guardar imagen temporalmente con máxima calidad y DPI original
-                                temp_path = os.path.join(app.config['UPLOAD_FOLDER'], f'temp_{archivo}')
+                                import tempfile
+                                temp_fd, temp_path = tempfile.mkstemp(suffix=os.path.splitext(archivo)[1] or '.jpg')
+                                os.close(temp_fd)
                                 img.save(temp_path, quality=100, optimize=False)
                                 
                                 # Agregar espacio antes de la imagen
@@ -1434,8 +1452,11 @@ def generar_pdf_multipagina_profesional(incidencias, agrupacion='estado'):
             if incidencia.adjuntos:
                 archivos = incidencia.adjuntos.split(',')
                 for archivo in archivos:
-                    archivo_path = os.path.join(app.config['UPLOAD_FOLDER'], archivo.strip())
-                    if os.path.exists(archivo_path):
+                    # Buscar en R2: Incidencias/nombre_archivo
+                    r2_path = f'Incidencias/{archivo.strip()}'
+                    archivo_path = download_to_temp_file(r2_path)
+                    
+                    if archivo_path and os.path.exists(archivo_path):
                         try:
                             # Verificar si es una imagen
                             with PILImage.open(archivo_path) as img:
@@ -1450,7 +1471,9 @@ def generar_pdf_multipagina_profesional(incidencias, agrupacion='estado'):
                                     img = img.resize((new_width, new_height), PILImage.Resampling.LANCZOS)
                                 
                                 # Guardar imagen temporalmente con máxima calidad y DPI muy alto
-                                temp_path = os.path.join(app.config['UPLOAD_FOLDER'], f'temp_{archivo}')
+                                import tempfile
+                                temp_fd, temp_path = tempfile.mkstemp(suffix=os.path.splitext(archivo)[1] or '.jpg')
+                                os.close(temp_fd)
                                 img.save(temp_path, quality=100, optimize=False, dpi=(1200, 1200))
                                 
                                 # Salto de página antes de cada imagen
@@ -1654,8 +1677,11 @@ def generar_pdf_informe_estructurado(incidencias, datos_informe):
             titulos = incidencia.titulos_imagenes.split(',') if incidencia.titulos_imagenes else []
             
             for j, archivo in enumerate(archivos):
-                archivo_path = os.path.join(app.config['UPLOAD_FOLDER'], archivo.strip())
-                if os.path.exists(archivo_path):
+                # Buscar en R2: Incidencias/nombre_archivo
+                r2_path = f'Incidencias/{archivo.strip()}'
+                archivo_path = download_to_temp_file(r2_path)
+                
+                if archivo_path and os.path.exists(archivo_path):
                     try:
                         # Verificar si es una imagen
                         with PILImage.open(archivo_path) as img:
@@ -1670,7 +1696,9 @@ def generar_pdf_informe_estructurado(incidencias, datos_informe):
                                 img = img.resize((new_width, new_height), PILImage.Resampling.LANCZOS)
                             
                             # Guardar imagen temporalmente con máxima calidad y DPI muy alto
-                            temp_path = os.path.join(app.config['UPLOAD_FOLDER'], f'temp_{archivo}')
+                            import tempfile
+                            temp_fd, temp_path = tempfile.mkstemp(suffix=os.path.splitext(archivo)[1] or '.jpg')
+                            os.close(temp_fd)
                             img.save(temp_path, quality=100, optimize=False, dpi=(1200, 1200))
                             
                             # Agregar espacio antes de la imagen
@@ -2005,16 +2033,20 @@ def generar_pdf_informe_html_format(incidencias, datos_informe):
             for img_config in configuracion.get('imagenes_individuales', []):
                 archivo = img_config['archivo']
                 titulo = img_config['titulo']
-                archivo_path = os.path.join(app.config['UPLOAD_FOLDER'], archivo)
+                # Buscar en R2: Incidencias/nombre_archivo
+                r2_path = f'Incidencias/{archivo}'
+                archivo_path = download_to_temp_file(r2_path)
                 
-                if os.path.exists(archivo_path):
+                if archivo_path and os.path.exists(archivo_path):
                     try:
                         with PILImage.open(archivo_path) as img:
                             # Calcular tamaño optimizado según relación de aspecto
                             new_width, new_height = calcular_tamaño_imagen(img.width, img.height)
                             
                             # Guardar imagen temporalmente
-                            temp_path = os.path.join(app.config['UPLOAD_FOLDER'], f'temp_{archivo}')
+                            import tempfile
+                            temp_fd, temp_path = tempfile.mkstemp(suffix=os.path.splitext(archivo)[1] or '.jpg')
+                            os.close(temp_fd)
                             img_resized = img.resize((new_width, new_height), PILImage.Resampling.LANCZOS)
                             img_resized.save(temp_path)
                             
@@ -2052,8 +2084,10 @@ def generar_pdf_informe_html_format(incidencias, datos_informe):
                 imagenes_paths = []
                 
                 for archivo_collage in imagenes_collage:
-                    archivo_path = os.path.join(app.config['UPLOAD_FOLDER'], archivo_collage.strip())
-                    if os.path.exists(archivo_path):
+                    # Buscar en R2: Incidencias/nombre_archivo
+                    r2_path = f'Incidencias/{archivo_collage.strip()}'
+                    archivo_path = download_to_temp_file(r2_path)
+                    if archivo_path and os.path.exists(archivo_path):
                         imagenes_paths.append(archivo_path)
                 
                 if imagenes_paths:
@@ -2500,26 +2534,30 @@ def diligenciar_formulario(id):
 
                             image_bytes = base64.b64decode(encoded)
 
-                            # Preparar carpetas: uploads/formularios/firmas
-                            formularios_root = os.path.join(app.config['UPLOAD_FOLDER'], 'formularios')
-                            firmas_dir = os.path.join(formularios_root, 'firmas')
-                            os.makedirs(firmas_dir, exist_ok=True)
-
                             # Nombre de archivo
                             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                             png_filename = f'firma_{campo.id}_{respuesta_formulario.id}_{timestamp}.png'
-                            png_path = os.path.join(firmas_dir, png_filename)
 
                             # Decodificar y guardar como PNG con fondo blanco
                             img = PILImage.open(BytesIO(image_bytes)).convert('RGBA')
                             bg = PILImage.new("RGB", img.size, (255, 255, 255))
                             bg.paste(img, mask=img.split()[3] if img.mode == 'RGBA' else None)
-                            bg.save(png_path, format='PNG')
+                            
+                            # Guardar en bytes para subir a R2
+                            img_buffer = BytesIO()
+                            bg.save(img_buffer, format='PNG')
+                            img_buffer.seek(0)
 
-                            print(f"DEBUG: Firma PNG guardada (POST) en: {png_path}")
-
-                            # Guardar SOLO la ruta relativa en la DB
-                            respuesta_campo.valor_archivo = os.path.join('formularios', 'firmas', png_filename)
+                            # Ruta en R2: Formularios/firmas/nombre_archivo
+                            r2_path = f'Formularios/firmas/{png_filename}'
+                            
+                            print(f"DEBUG: Guardando firma PNG en R2: {r2_path}")
+                            if upload_file_to_r2(img_buffer, r2_path, content_type='image/png'):
+                                print(f"DEBUG: Firma PNG guardada en R2 exitosamente")
+                                # Guardar SOLO la ruta relativa en la DB para compatibilidad (usar / para compatibilidad multiplataforma)
+                                respuesta_campo.valor_archivo = f'formularios/firmas/{png_filename}'
+                            else:
+                                raise Exception("Error al guardar firma en R2")
                         except Exception as e:
                             print(f"ERROR: No se pudo guardar la firma PNG: {e}")
                             # Como fallback guarda el base64 para no perder datos
@@ -2546,19 +2584,18 @@ def diligenciar_formulario(id):
                             if not file_extension:
                                 file_extension = '.jpg'  # Default para imágenes sin extensión
                             
-                            # Crear estructura de carpetas organizada para fotos
-                            formulario_nombre = secure_filename("formularios")
-                            imagenes_dir = os.path.join(app.config['UPLOAD_FOLDER'], formulario_nombre, 'imagenes')
-                            os.makedirs(imagenes_dir, exist_ok=True)
-                            
                             # Crear nombre único: foto_campoID_respuestaID_timestamp.ext
                             unique_filename = f'foto_{campo.id}_{respuesta_formulario.id}_{timestamp}_{i+1}{file_extension}'
-                            filepath = os.path.join(imagenes_dir, unique_filename)
                             
-                            print(f"DEBUG: Guardando como: {unique_filename}")
-                            archivo.save(filepath)
-                            nombres_archivos.append(unique_filename)
-                            print(f"DEBUG: Archivo guardado exitosamente: {unique_filename}")
+                            # Ruta en R2: Formularios/imagenes/nombre_archivo
+                            r2_path = f'Formularios/imagenes/{unique_filename}'
+                            
+                            print(f"DEBUG: Guardando en R2 como: {r2_path}")
+                            if upload_file_to_r2(archivo, r2_path, content_type=archivo.content_type):
+                                nombres_archivos.append(unique_filename)
+                                print(f"DEBUG: Archivo guardado exitosamente en R2: {unique_filename}")
+                            else:
+                                print(f"DEBUG: Error al guardar archivo en R2: {unique_filename}")
                     
                     if nombres_archivos:
                         respuesta_campo.valor_archivo = ','.join(nombres_archivos)
@@ -2616,11 +2653,11 @@ def descargar_formulario_pdf(id):
         flash('No se encontró el archivo PDF', 'error')
         return redirect(url_for('formularios'))
     
-    # Buscar el archivo en la estructura: uploads/formularios/nombredelformulario/nombredeldocumento.pdf
+    # Buscar el archivo en R2: Formularios/nombredelformulario/nombredeldocumento.pdf
     formulario_nombre = secure_filename(respuesta_formulario.formulario.nombre)
-    pdf_filepath = os.path.join(app.config['UPLOAD_FOLDER'], 'formularios', formulario_nombre, respuesta_formulario.archivo_pdf)
+    r2_path = f'Formularios/{formulario_nombre}/{respuesta_formulario.archivo_pdf}'
     
-    if not os.path.exists(pdf_filepath):
+    if not file_exists_in_r2(r2_path):
         flash('El archivo PDF no existe', 'error')
         return redirect(url_for('formularios'))
     
@@ -2643,18 +2680,42 @@ def descargar_formulario_pdf_file(id):
     if not respuesta_formulario.archivo_pdf:
         abort(404)
     
-    # Buscar el archivo en la estructura: uploads/formularios/nombredelformulario/nombredeldocumento.pdf
+    # Buscar el archivo en R2: Formularios/nombredelformulario/nombredeldocumento.pdf
     formulario_nombre = secure_filename(respuesta_formulario.formulario.nombre)
-    pdf_filepath = os.path.join(app.config['UPLOAD_FOLDER'], 'formularios', formulario_nombre, respuesta_formulario.archivo_pdf)
+    r2_path = f'Formularios/{formulario_nombre}/{respuesta_formulario.archivo_pdf}'
     
-    if not os.path.exists(pdf_filepath):
+    if not file_exists_in_r2(r2_path):
         abort(404)
     
-    # NO eliminar archivos de firma - mantener para inspección
-    print(f"DEBUG: Archivos de firma mantenidos en uploads/formularios/firmas/ para inspección")
+    # Descargar archivo de R2 a temporal para servir
+    temp_file = download_to_temp_file(r2_path)
+    if not temp_file:
+        abort(404)
+    
+    print(f"DEBUG: PDF descargado de R2 temporalmente para servir")
+    
+    def remove_temp_file(response):
+        try:
+            if os.path.exists(temp_file):
+                os.remove(temp_file)
+        except:
+            pass
+        return response
+    
+    from functools import wraps
+    from flask import after_this_request
+    
+    @after_this_request
+    def cleanup(response):
+        try:
+            if os.path.exists(temp_file):
+                os.remove(temp_file)
+        except:
+            pass
+        return response
     
     return send_file(
-        pdf_filepath,
+        temp_file,
         mimetype='application/pdf',
         as_attachment=True,
         download_name=respuesta_formulario.archivo_pdf
@@ -3035,12 +3096,11 @@ def generar_pdf_simple(respuesta_formulario):
                     contador_imagen = 1
                     for foto_filename in fotos_list:
                         foto_filename = foto_filename.strip()
-                        # Buscar foto en la nueva ubicación organizada
-                        formulario_nombre = secure_filename("formularios")
-                        imagenes_dir = os.path.join(app.config['UPLOAD_FOLDER'], formulario_nombre, 'imagenes')
-                        foto_path = os.path.join(imagenes_dir, foto_filename)
+                        # Buscar foto en R2: Formularios/imagenes/nombre_archivo
+                        r2_foto_path = f'Formularios/imagenes/{foto_filename}'
+                        foto_path = download_to_temp_file(r2_foto_path)
                         
-                        if os.path.exists(foto_path):
+                        if foto_path and os.path.exists(foto_path):
                             try:
                                 with PILImage.open(foto_path) as img:
                                     # Calcular dimensiones para visualización (sin redimensionar la imagen)
@@ -3056,7 +3116,9 @@ def generar_pdf_simple(respuesta_formulario):
                                         new_height = img.height
                                     
                                     # Guardar imagen temporalmente con máxima calidad y DPI original
-                                    temp_path = os.path.join(app.config['UPLOAD_FOLDER'], f'temp_{foto_filename}')
+                                    import tempfile
+                                    temp_fd, temp_path = tempfile.mkstemp(suffix=os.path.splitext(foto_filename)[1] or '.jpg')
+                                    os.close(temp_fd)
                                     img.save(temp_path, quality=100, optimize=False)
                                     
                                     # Agregar al PDF
@@ -3415,30 +3477,98 @@ def generar_pdf_formulario(respuesta_formulario):
 
                         info_para = Paragraph("<br/>".join(lineas_info) if lineas_info else "Sin datos del firmante", value_style)
 
-                        # Determinar ruta de la firma PNG
-                        posible_path = os.path.join(app.config['UPLOAD_FOLDER'], respuesta_campo.valor_archivo) if not os.path.isabs(respuesta_campo.valor_archivo) else respuesta_campo.valor_archivo
+                        # Determinar ruta de la firma PNG en R2 o procesar base64
                         png_path = None
-                        if os.path.exists(posible_path):
-                            png_path = posible_path
-                            print(f"DEBUG: Firma para tabla (ruta existente): {png_path}")
-                        else:
-                            # Fallback: si viniera base64, decodificar y guardar
+                        print(f"DEBUG: valor_archivo para firma: {respuesta_campo.valor_archivo[:100] if respuesta_campo.valor_archivo else 'None'}...")
+                        
+                        # Primero verificar si es base64 (cuando falla la subida a R2)
+                        if respuesta_campo.valor_archivo and respuesta_campo.valor_archivo.startswith('data:image'):
+                            print(f"DEBUG: Detectada firma como base64")
+                            # Es base64 - decodificar y guardar temporalmente
                             import base64
                             from io import BytesIO
-                            if ',' in respuesta_campo.valor_archivo:
-                                _, encoded = respuesta_campo.valor_archivo.split(',', 1)
-                            else:
-                                encoded = respuesta_campo.valor_archivo
-                            image_bytes = base64.b64decode(encoded)
-                            img = PILImage.open(BytesIO(image_bytes)).convert('RGBA')
-                            bg = PILImage.new("RGB", img.size, (255, 255, 255))
-                            bg.paste(img, mask=img.split()[3] if img.mode == 'RGBA' else None)
-                            firmas_dir = os.path.join(app.config['UPLOAD_FOLDER'], 'formularios', 'firmas')
-                            os.makedirs(firmas_dir, exist_ok=True)
-                            from datetime import datetime
-                            png_path = os.path.join(firmas_dir, f'firma_{campo.id}_{respuesta_formulario.id}_{datetime.now().strftime("%Y%m%d_%H%M%S")}.png')
-                            bg.save(png_path, format='PNG')
-                            print(f"DEBUG: Firma guardada en fallback para tabla: {png_path}")
+                            try:
+                                if ',' in respuesta_campo.valor_archivo:
+                                    _, encoded = respuesta_campo.valor_archivo.split(',', 1)
+                                else:
+                                    encoded = respuesta_campo.valor_archivo
+                                image_bytes = base64.b64decode(encoded)
+                                img = PILImage.open(BytesIO(image_bytes)).convert('RGBA')
+                                bg = PILImage.new("RGB", img.size, (255, 255, 255))
+                                bg.paste(img, mask=img.split()[3] if img.mode == 'RGBA' else None)
+                                
+                                # Guardar temporalmente
+                                import tempfile
+                                temp_fd, png_path = tempfile.mkstemp(suffix='.png')
+                                os.close(temp_fd)
+                                bg.save(png_path, format='PNG')
+                                print(f"DEBUG: Firma base64 guardada temporalmente para tabla: {png_path}")
+                            except Exception as e:
+                                print(f"DEBUG: Error procesando firma base64: {e}")
+                                import traceback
+                                traceback.print_exc()
+                                png_path = None
+                        elif respuesta_campo.valor_archivo and ('formularios' in respuesta_campo.valor_archivo or 'firmas' in respuesta_campo.valor_archivo):
+                            # Construir ruta R2 desde la ruta relativa guardada en DB
+                            # respuesta_campo.valor_archivo puede ser: "formularios/firmas/firma_xxx.png" o "formularios\firmas\firma_xxx.png"
+                            # Normalizar separadores y convertir a: "Formularios/firmas/firma_xxx.png"
+                            print(f"DEBUG: Detectada firma como ruta de archivo: {respuesta_campo.valor_archivo}")
+                            # Normalizar separadores de ruta (convertir \ a /)
+                            normalized_path = respuesta_campo.valor_archivo.replace('\\', '/')
+                            r2_firma_path = normalized_path.replace('formularios', 'Formularios', 1)
+                            print(f"DEBUG: Buscando en R2: {r2_firma_path}")
+                            
+                            try:
+                                if file_exists_in_r2(r2_firma_path):
+                                    # Descargar temporalmente para generar PDF
+                                    png_path = download_to_temp_file(r2_firma_path)
+                                    if png_path:
+                                        print(f"DEBUG: Firma descargada de R2 exitosamente: {r2_firma_path}")
+                                    else:
+                                        print(f"DEBUG: Error al descargar firma de R2: {r2_firma_path}")
+                                else:
+                                    print(f"DEBUG: Firma no encontrada en R2: {r2_firma_path}")
+                                    # Intentar como base64 si no está en R2
+                                    print(f"DEBUG: Intentando procesar como base64...")
+                            except Exception as e:
+                                print(f"DEBUG: Error verificando firma en R2: {e}")
+                                import traceback
+                                traceback.print_exc()
+                        
+                        # Si aún no tenemos la imagen, intentar procesar como base64 directamente
+                        if not png_path and respuesta_campo.valor_archivo:
+                            print(f"DEBUG: Intento final: procesar valor_archivo como base64")
+                            try:
+                                import base64
+                                from io import BytesIO
+                                # Intentar decodificar directamente sin verificar prefijo
+                                try:
+                                    if ',' in respuesta_campo.valor_archivo:
+                                        _, encoded = respuesta_campo.valor_archivo.split(',', 1)
+                                    else:
+                                        encoded = respuesta_campo.valor_archivo
+                                    
+                                    # Intentar decodificar como base64
+                                    image_bytes = base64.b64decode(encoded)
+                                    img = PILImage.open(BytesIO(image_bytes)).convert('RGBA')
+                                    bg = PILImage.new("RGB", img.size, (255, 255, 255))
+                                    bg.paste(img, mask=img.split()[3] if img.mode == 'RGBA' else None)
+                                    
+                                    # Guardar temporalmente
+                                    import tempfile
+                                    temp_fd, png_path = tempfile.mkstemp(suffix='.png')
+                                    os.close(temp_fd)
+                                    bg.save(png_path, format='PNG')
+                                    print(f"DEBUG: Firma procesada como base64 en intento final: {png_path}")
+                                except:
+                                    pass
+                            except Exception as e:
+                                print(f"DEBUG: Error en intento final de procesar firma: {e}")
+
+                        if not png_path:
+                            error_msg = f"No se pudo obtener la imagen de la firma. valor_archivo: {respuesta_campo.valor_archivo[:100] if respuesta_campo.valor_archivo else 'None'}"
+                            print(f"ERROR: {error_msg}")
+                            raise Exception(error_msg)
 
                         # Crear imagen escalada de firma
                         from reportlab.lib.pagesizes import A4
@@ -3484,12 +3614,13 @@ def generar_pdf_formulario(respuesta_formulario):
                     # Procesar fotos con redimensionamiento inteligente
                     for foto_filename in fotos_list:
                         foto_filename = foto_filename.strip()
-                        # Buscar foto en la nueva ubicación organizada
-                        formulario_nombre = secure_filename("formularios")
-                        imagenes_dir = os.path.join(app.config['UPLOAD_FOLDER'], formulario_nombre, 'imagenes')
-                        foto_path = os.path.join(imagenes_dir, foto_filename)
+                        # Buscar foto en R2: Formularios/imagenes/nombre_archivo
+                        r2_foto_path = f'Formularios/imagenes/{foto_filename}'
                         
-                        if os.path.exists(foto_path):
+                        # Descargar temporalmente para generar PDF
+                        foto_path = download_to_temp_file(r2_foto_path)
+                        
+                        if foto_path and os.path.exists(foto_path):
                             try:
                                 # Verificar si es una imagen
                                 with PILImage.open(foto_path) as img:
@@ -3535,13 +3666,10 @@ def generar_pdf_formulario(respuesta_formulario):
                                     # NO redimensionar la imagen - mantener resolución original
                                     # Solo ajustar el tamaño de visualización en el PDF
                                     
-                                    # Buscar imagen en la nueva ubicación organizada
-                                    formulario_nombre = secure_filename("formularios")
-                                    imagenes_dir = os.path.join(app.config['UPLOAD_FOLDER'], formulario_nombre, 'imagenes')
-                                    original_path = os.path.join(imagenes_dir, foto_filename)
-                                    
                                     # Guardar imagen temporalmente con máxima calidad y DPI original
-                                    temp_path = os.path.join(app.config['UPLOAD_FOLDER'], f'temp_{foto_filename}')
+                                    import tempfile
+                                    temp_fd, temp_path = tempfile.mkstemp(suffix=os.path.splitext(foto_filename)[1] or '.jpg')
+                                    os.close(temp_fd)
                                     img.save(temp_path, quality=100, optimize=False)
                                     
                                     # Agregar imagen centrada con borde usando dimensiones calculadas
@@ -3587,21 +3715,20 @@ def generar_pdf_formulario(respuesta_formulario):
         doc.build(story)
         buffer.seek(0)
         
-        # Guardar archivo en la estructura solicitada: uploads/formularios/nombredelformulario/nombredeldocumento.pdf
+        # Guardar archivo en R2: Formularios/nombreformulario/documento.pdf
         formulario_nombre = secure_filename(respuesta_formulario.formulario.nombre)
         documento_nombre = f'documento_{respuesta_formulario.id}_{datetime.now().strftime("%Y%m%d_%H%M%S")}.pdf'
         
-        # Crear directorio si no existe
-        formulario_dir = os.path.join(app.config['UPLOAD_FOLDER'], 'formularios', formulario_nombre)
-        os.makedirs(formulario_dir, exist_ok=True)
+        # Ruta en R2
+        r2_path = f'Formularios/{formulario_nombre}/{documento_nombre}'
         
-        filepath = os.path.join(formulario_dir, documento_nombre)
-        
-        print(f"DEBUG: Guardando PDF en: {filepath}")
-        with open(filepath, 'wb') as f:
-            f.write(buffer.getvalue())
-        
-        print(f"DEBUG: PDF generado exitosamente: {documento_nombre}")
+        print(f"DEBUG: Guardando PDF en R2: {r2_path}")
+        pdf_bytes = buffer.getvalue()
+        if upload_file_to_r2(pdf_bytes, r2_path, content_type='application/pdf'):
+            print(f"DEBUG: PDF generado exitosamente en R2: {documento_nombre}")
+        else:
+            print(f"ERROR: No se pudo guardar PDF en R2")
+            return None
         
         # Limpiar archivos temporales después de generar el PDF
         try:

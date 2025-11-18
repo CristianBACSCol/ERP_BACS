@@ -1,5 +1,6 @@
 # Configuración de la base de datos
 DB_HOST=localhost
+DB_PORT=3306
 DB_USER=tu_usuario_mysql
 DB_PASSWORD=tu_contraseña_mysql
 DB_NAME=erp_bacs
@@ -12,3 +13,9 @@ FLASK_DEBUG=True
 # Usuario inicial del sistema (administrador)
 INITIAL_USER_EMAIL=admin@tuempresa.com
 INITIAL_USER_PASSWORD=tu_contraseña_segura_aqui
+
+# Configuración de Cloudflare R2
+R2_ENDPOINT_URL=https://e0ddac0321b698a6696551a5287e5392.r2.cloudflarestorage.com
+R2_ACCESS_KEY_ID=tu_access_key_id
+R2_SECRET_ACCESS_KEY=tu_secret_access_key
+R2_BUCKET_NAME=erp-bacs

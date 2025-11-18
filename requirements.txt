@@ -26,3 +26,7 @@ scikit-image>=0.18.0
 
 # Seguridad
 bcrypt==4.0.1
+
+# Almacenamiento en la nube (Cloudflare R2)
+boto3==1.34.0
+botocore==1.34.0
