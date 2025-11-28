@@ -443,86 +443,32 @@ function inicializarPreviewsFotos() {
                     const optimizedFiles = [];
                     
                     for (const file of files) {
-                        const isImage = file.type.startsWith('image/') || 
-                                       file.name.toLowerCase().endsWith('.heic') ||
-                                       file.name.toLowerCase().endsWith('.heif');
+                        // DETECTAR HEIC PRIMERO - enviar directamente al backend
+                        const isHeic = file.name.toLowerCase().endsWith('.heic') || 
+                                     file.name.toLowerCase().endsWith('.heif') ||
+                                     file.type === 'image/heic' ||
+                                     file.type === 'image/heif';
+                        
+                        if (isHeic) {
+                            // HEIC: Enviar directamente al backend - NO intentar procesar en cliente
+                            console.log(`DEBUG: 🔍 Archivo HEIC detectado: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`);
+                            console.log('DEBUG: El backend procesará, convertirá y optimizará el archivo HEIC automáticamente');
+                            updateLoadingMsg(`El backend procesará el archivo HEIC: ${file.name}...`);
+                            optimizedFiles.push(file);
+                            continue;  // Saltar al siguiente archivo - NO procesar en cliente
+                        }
+                        
+                        // Solo procesar imágenes que NO sean HEIC
+                        const isImage = file.type.startsWith('image/');
                         
                         if (isImage) {
                             try {
-                                let fileToOptimize = file;
+                                // HEIC ya fue manejado arriba - este bloque solo procesa imágenes normales
+                                updateLoadingMsg(`Optimizando: ${file.name}...`);
                                 
-                                // CRÍTICO: Si es HEIC, DEBE convertirse ANTES de optimizar
-                                const isHeic = file.name.toLowerCase().endsWith('.heic') || 
-                                             file.name.toLowerCase().endsWith('.heif') ||
-                                             file.type === 'image/heic' ||
-                                             file.type === 'image/heif';
-                                
-                                if (isHeic) {
-                                    console.log(`DEBUG: 🔍 Detectado archivo HEIC: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`);
-                                    updateLoadingMsg(`Convirtiendo HEIC a JPEG: ${file.name}...`);
-                                    
-                                    // Verificar que heic2any esté disponible
-                                    let heicConverter = null;
-                                    let attempts = 0;
-                                    while (attempts < 50 && !heicConverter) {
-                                        if (typeof heic2any !== 'undefined') {
-                                            heicConverter = heic2any;
-                                            break;
-                                        }
-                                        await new Promise(resolve => setTimeout(resolve, 100));
-                                        attempts++;
-                                    }
-                                    
-                                    // Si heic2any no está disponible, dejar que el backend procese el HEIC
-                                    if (!heicConverter) {
-                                        console.warn('⚠️ ADVERTENCIA: heic2any no disponible en cliente. El backend procesará el archivo HEIC automáticamente.');
-                                        updateLoadingMsg(`El backend procesará el archivo HEIC: ${file.name}...`);
-                                        // Usar el archivo original - el backend lo convertirá y optimizará
-                                        optimizedFiles.push(file);
-                                        continue;
-                                    }
-                                    
-                                    // Intentar convertir, pero no bloquear si falla
-                                    let conversionSuccess = false;
-                                    try {
-                                        fileToOptimize = await convertirHEIC(file);
-                                        
-                                        // Verificar que la conversión fue exitosa
-                                        if (fileToOptimize && fileToOptimize.type === 'image/jpeg') {
-                                            const convertedSize = (fileToOptimize.size / 1024 / 1024).toFixed(2);
-                                            console.log(`DEBUG: ✅ HEIC convertido exitosamente en cliente - Tamaño convertido: ${convertedSize} MB`);
-                                            updateLoadingMsg(`Optimizando imagen convertida (${convertedSize} MB)...`);
-                                            conversionSuccess = true;
-                                        }
-                                    } catch (heicError) {
-                                        console.warn('⚠️ ADVERTENCIA: No se pudo convertir HEIC en cliente:', heicError.message);
-                                        console.log('DEBUG: El backend procesará y convertirá el archivo HEIC automáticamente');
-                                        updateLoadingMsg(`El backend procesará el archivo HEIC: ${file.name}...`);
-                                        // Continuar con el archivo original - el backend lo procesará
-                                        optimizedFiles.push(file);
-                                        continue;
-                                    }
-                                    
-                                    // Solo continuar con optimización si la conversión fue exitosa
-                                    if (!conversionSuccess) {
-                                        optimizedFiles.push(file);
-                                        continue;
-                                    }
-                                } else {
-                                    updateLoadingMsg(`Optimizando: ${file.name}...`);
-                                }
-                                
-                                // Verificar que NO sea HEIC antes de optimizar
-                                if (fileToOptimize.name.toLowerCase().endsWith('.heic') || 
-                                    fileToOptimize.name.toLowerCase().endsWith('.heif')) {
-                                    console.warn('⚠️ ADVERTENCIA: Archivo sigue siendo HEIC, el backend lo procesará');
-                                    optimizedFiles.push(file);
-                                    continue;
-                                }
-                                
-                                // Optimizar la imagen (ya sea original o convertida)
-                                console.log(`DEBUG: 🔄 Optimizando imagen: ${fileToOptimize.name} (${(fileToOptimize.size / 1024 / 1024).toFixed(2)} MB), Tipo: ${fileToOptimize.type}`);
-                                const optimizedFile = await optimizarImagen(fileToOptimize);
+                                // Optimizar la imagen (solo formatos compatibles con navegador)
+                                console.log(`DEBUG: 🔄 Optimizando imagen: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB), Tipo: ${file.type}`);
+                                const optimizedFile = await optimizarImagen(file);
                                 const finalSize = (optimizedFile.size / 1024 / 1024).toFixed(2);
                                 console.log(`DEBUG: ✅ Imagen optimizada: ${optimizedFile.name} - Tamaño final: ${finalSize} MB`);
                                 
@@ -538,15 +484,6 @@ function inicializarPreviewsFotos() {
                                 
                                 // Si falla la optimización en cliente, usar el archivo original y dejar que el backend lo procese
                                 console.log('DEBUG: Fallo en optimización cliente, el backend procesará el archivo automáticamente');
-                                
-                                // Si es HEIC, asegurarse de enviarlo al backend sin intentar optimizar
-                                if (file.name.toLowerCase().endsWith('.heic') || 
-                                    file.name.toLowerCase().endsWith('.heif') ||
-                                    file.type === 'image/heic' ||
-                                    file.type === 'image/heif') {
-                                    console.log('DEBUG: Archivo HEIC será procesado completamente por el backend');
-                                }
-                                
                                 optimizedFiles.push(file);
                             }
                         } else {
