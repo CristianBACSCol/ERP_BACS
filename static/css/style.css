@@ -97,6 +97,13 @@
     min-width: 600px !important;
 }
 
+/* Forzar que modal-large tenga prioridad sobre modal-content */
+.modal-content.modal-large {
+    max-width: 800px !important;
+    width: 90% !important;
+    min-width: 600px !important;
+}
+
 /* Modal pequeño para confirmaciones */
 .modal-small {
     max-width: 400px !important;
@@ -175,6 +182,7 @@
     box-sizing: border-box;
     display: block !important;
     clear: both;
+    position: relative;
 }
 
 .modal-body .form-control {
@@ -182,7 +190,8 @@
     box-sizing: border-box;
     margin-bottom: 0;
     display: block !important;
-    max-width: 100%;
+    max-width: 100% !important;
+    min-width: 0 !important;
 }
 
 .modal-body .form-label {
@@ -190,6 +199,16 @@
     margin-bottom: 0.5rem;
     width: 100% !important;
     clear: both;
+    position: relative;
+}
+
+/* Asegurar que los selects y textareas también tengan el ancho correcto */
+.modal-body select.form-control,
+.modal-body textarea.form-control,
+.modal-body input.form-control {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box;
 }
 
 /* Ajustes para móviles en modal-body */
