@@ -66,7 +66,7 @@
                             <a href="{{ url_for('editar_formulario', id=formulario.id) }}" class="btn btn-sm btn-outline-primary" title="Editar formulario">
                                 <i class="icon-edit"></i>
                             </a>
-                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="eliminarFormulario({{ formulario.id }}, '{{ formulario.nombre }}')" title="Eliminar formulario">
+                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="eliminarFormulario({{ formulario.id }}, {{ formulario.nombre|tojson }})" title="Eliminar formulario">
                                 <i class="icon-trash"></i>
                             </button>
                         </div>
@@ -114,11 +114,22 @@ function eliminarFormulario(id, nombre) {
     document.getElementById('confirmDeleteBtn').onclick = function() {
         eliminarFormularioConfirmado(id);
     };
-    document.getElementById('confirmModal').style.display = 'block';
+    
+    const modal = document.getElementById('confirmModal');
+    modal.style.display = 'block';
+    
     // Prevenir scroll del body cuando el modal está abierto
+    const scrollY = window.scrollY;
+    document.body.style.position = 'fixed';
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = '100%';
     document.body.style.overflow = 'hidden';
+    
+    // Guardar la posición del scroll para restaurarla después
+    modal.dataset.scrollY = scrollY;
+    
     // Scroll al inicio del modal
-    document.getElementById('confirmModal').scrollTop = 0;
+    modal.scrollTop = 0;
 }
 
 function eliminarFormularioConfirmado(id) {
@@ -143,9 +154,16 @@ function eliminarFormularioConfirmado(id) {
 }
 
 function closeModal() {
-    document.getElementById('confirmModal').style.display = 'none';
+    const modal = document.getElementById('confirmModal');
+    modal.style.display = 'none';
+    
     // Restaurar scroll del body
+    const scrollY = modal.dataset.scrollY || 0;
+    document.body.style.position = '';
+    document.body.style.top = '';
+    document.body.style.width = '';
     document.body.style.overflow = '';
+    window.scrollTo(0, parseInt(scrollY || 0));
 }
 
 // Cerrar modal con tecla Escape

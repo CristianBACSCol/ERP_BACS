@@ -94,7 +94,7 @@
     </div>
 
     <!-- Modal para agregar/editar campo -->
-    <div class="modal" id="campoModal">
+    <div class="modal" id="campoModal" onclick="if(event.target === this) cerrarModalCampo()">
         <div class="modal-content modal-large">
             <div class="modal-header">
                 <h3 id="modalTitle">Agregar Campo</h3>
@@ -407,11 +407,22 @@ function mostrarModalAgregarCampo() {
     document.getElementById('modalTitle').textContent = 'Agregar Campo';
     document.getElementById('campoForm').reset();
     document.getElementById('configuracionEspecifica').style.display = 'none';
-    document.getElementById('campoModal').style.display = 'block';
+    
+    const modal = document.getElementById('campoModal');
+    modal.style.display = 'block';
+    
     // Prevenir scroll del body cuando el modal está abierto
+    const scrollY = window.scrollY;
+    document.body.style.position = 'fixed';
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = '100%';
     document.body.style.overflow = 'hidden';
+    
+    // Guardar la posición del scroll para restaurarla después
+    modal.dataset.scrollY = scrollY;
+    
     // Scroll al inicio del modal
-    document.getElementById('campoModal').scrollTop = 0;
+    modal.scrollTop = 0;
 }
 
 function editarCampo(campoId) {
@@ -443,22 +454,43 @@ function editarCampo(campoId) {
         // Por ahora, simplemente mostrar el modal
     }
     
-    document.getElementById('campoModal').style.display = 'block';
+    const modal = document.getElementById('campoModal');
+    modal.style.display = 'block';
+    
     // Prevenir scroll del body cuando el modal está abierto
+    const scrollY = window.scrollY;
+    document.body.style.position = 'fixed';
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = '100%';
     document.body.style.overflow = 'hidden';
+    
+    // Guardar la posición del scroll para restaurarla después
+    modal.dataset.scrollY = scrollY;
+    
     // Scroll al inicio del modal
-    document.getElementById('campoModal').scrollTop = 0;
+    modal.scrollTop = 0;
 }
 
 function eliminarCampo(campoId) {
     document.getElementById('confirmDeleteBtn').onclick = function() {
         eliminarCampoConfirmado(campoId);
     };
-    document.getElementById('confirmModal').style.display = 'block';
+    
+    const modal = document.getElementById('confirmModal');
+    modal.style.display = 'block';
+    
     // Prevenir scroll del body cuando el modal está abierto
+    const scrollY = window.scrollY;
+    document.body.style.position = 'fixed';
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = '100%';
     document.body.style.overflow = 'hidden';
+    
+    // Guardar la posición del scroll para restaurarla después
+    modal.dataset.scrollY = scrollY;
+    
     // Scroll al inicio del modal
-    document.getElementById('confirmModal').scrollTop = 0;
+    modal.scrollTop = 0;
 }
 
 function eliminarCampoConfirmado(campoId) {
@@ -640,15 +672,29 @@ function guardarCampo() {
 }
 
 function cerrarModalCampo() {
-    document.getElementById('campoModal').style.display = 'none';
+    const modal = document.getElementById('campoModal');
+    modal.style.display = 'none';
+    
     // Restaurar scroll del body
+    const scrollY = modal.dataset.scrollY || 0;
+    document.body.style.position = '';
+    document.body.style.top = '';
+    document.body.style.width = '';
     document.body.style.overflow = '';
+    window.scrollTo(0, parseInt(scrollY || 0));
 }
 
 function cerrarModalConfirmacion() {
-    document.getElementById('confirmModal').style.display = 'none';
+    const modal = document.getElementById('confirmModal');
+    modal.style.display = 'none';
+    
     // Restaurar scroll del body
+    const scrollY = modal.dataset.scrollY || 0;
+    document.body.style.position = '';
+    document.body.style.top = '';
+    document.body.style.width = '';
     document.body.style.overflow = '';
+    window.scrollTo(0, parseInt(scrollY || 0));
 }
 
 // Cerrar modales con tecla Escape

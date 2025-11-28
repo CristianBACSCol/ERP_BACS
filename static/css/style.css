@@ -58,7 +58,9 @@
     background-color: rgba(0, 0, 0, 0.5);
     animation: fadeIn 0.3s ease;
     overflow-y: auto;
+    overflow-x: hidden;
     -webkit-overflow-scrolling: touch; /* Smooth scrolling en iOS */
+    /* Prevenir scroll del body cuando el modal está abierto */
 }
 
 .modal-content {
@@ -74,6 +76,9 @@
     max-height: 90vh;
     display: flex;
     flex-direction: column;
+    /* Asegurar que el modal esté siempre visible */
+    margin-top: 5vh;
+    margin-bottom: 5vh;
 }
 
 /* Ajustes para móviles */
@@ -83,6 +88,8 @@
         width: 95%;
         max-height: calc(100vh - 20px);
         border-radius: 8px 8px 0 0;
+        margin-top: 10px;
+        margin-bottom: 10px;
     }
     
     .modal {
@@ -130,14 +137,15 @@
 .modal-body {
     padding: 20px;
     overflow-y: auto;
+    overflow-x: hidden;
     flex: 1;
-    max-height: calc(90vh - 140px); /* Altura máxima considerando header y footer */
+    min-height: 0; /* Permite que el flex funcione correctamente */
+    /* El scroll interno se manejará automáticamente por el flex */
 }
 
 /* Ajustes para móviles en modal-body */
 @media (max-width: 768px) {
     .modal-body {
-        max-height: calc(100vh - 180px); /* Más espacio en móviles */
         padding: 15px;
     }
 }
