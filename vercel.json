@@ -24,6 +24,9 @@
       "maxDuration": 30,
       "memory": 1024
     }
+  },
+  "limits": {
+    "maxRequestSize": 10485760
   }
 }
 

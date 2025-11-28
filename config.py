@@ -16,7 +16,8 @@ class Config:
     # Configuración de archivos
     UPLOAD_FOLDER = 'uploads'  # Se mantiene para compatibilidad temporal, pero no se usa
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB max file size
-    
+    MAX_CONTENT_LENGTH = 10 * 1024 * 1024  # 10MB max file size (reducido para evitar 413 en Vercel)
+
     # Configuración de Cloudflare R2
     R2_ENDPOINT_URL = os.environ.get('R2_ENDPOINT_URL')
     R2_ACCESS_KEY_ID = os.environ.get('R2_ACCESS_KEY_ID')

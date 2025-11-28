@@ -2623,7 +2623,7 @@ def diligenciar_formulario(id):
                             file_size = archivo.tell()
                             archivo.seek(0)  # Volver al inicio
                             
-                            MAX_UPLOAD_SIZE = 20 * 1024 * 1024  # 20MB
+                            MAX_UPLOAD_SIZE = 10 * 1024 * 1024  # 10MB (reducido para evitar 413 en Vercel)
                             if file_size > MAX_UPLOAD_SIZE:
                                 error_msg = f"El archivo {archivo.filename} es demasiado grande ({file_size / 1024 / 1024:.2f} MB). Máximo permitido: {MAX_UPLOAD_SIZE / 1024 / 1024:.0f} MB"
                                 print(f"ERROR: {error_msg}")
@@ -2701,8 +2701,8 @@ def diligenciar_formulario(id):
                                 original_file_size = len(file_data)
                                 
                                 # Redimensionar si la imagen es muy grande (para evitar payloads muy grandes)
-                                # Límite: 4000px en la dimensión más grande
-                                MAX_DIMENSION = 4000
+                                # Límite reducido: 3000px en la dimensión más grande (más agresivo)
+                                MAX_DIMENSION = 3000
                                 needs_resize = False
                                 if img.width > MAX_DIMENSION or img.height > MAX_DIMENSION:
                                     needs_resize = True
@@ -2716,12 +2716,14 @@ def diligenciar_formulario(id):
                                     print(f"DEBUG: Imagen redimensionada de {original_size} a {img.size} (límite: {MAX_DIMENSION}px)")
                                 
                                 # Optimizar peso usando compresión JPG progresiva con calidad adaptativa
-                                # Comenzar con calidad 90, reducir si es necesario para cumplir límite de Vercel (4.5MB)
-                                MAX_FILE_SIZE = 4 * 1024 * 1024  # 4MB (dejando margen para otros datos del request)
+                                # Comenzar con calidad 85, reducir si es necesario para cumplir límite de Vercel (4.5MB)
+                                # Reducido a 2MB para dejar más margen para otros datos del request
+                                MAX_FILE_SIZE = 2 * 1024 * 1024  # 2MB (margen seguro para evitar 413 en Vercel)
                                 img_buffer = BytesIO()
                                 
-                                # Intentar diferentes niveles de calidad hasta que el archivo sea menor a 4MB
-                                quality_levels = [90, 85, 80, 75, 70, 65, 60]
+                                # Intentar diferentes niveles de calidad hasta que el archivo sea menor a 2MB
+                                # Empezar con calidad más baja para archivos más pequeños
+                                quality_levels = [85, 80, 75, 70, 65, 60, 55, 50]
                                 optimized_size = 0
                                 final_quality = 90
                                 
@@ -2749,8 +2751,8 @@ def diligenciar_formulario(id):
                                 # Si aún es muy grande, redimensionar más agresivamente
                                 if optimized_size > MAX_FILE_SIZE:
                                     print(f"DEBUG: Archivo aún muy grande ({optimized_size} bytes), redimensionando más agresivamente...")
-                                    # Redimensionar a máximo 2500px
-                                    MAX_DIMENSION_AGGRESSIVE = 2500
+                                    # Redimensionar a máximo 2000px (más agresivo)
+                                    MAX_DIMENSION_AGGRESSIVE = 2000
                                     if img.width > MAX_DIMENSION_AGGRESSIVE or img.height > MAX_DIMENSION_AGGRESSIVE:
                                         if img.width > img.height:
                                             new_width = MAX_DIMENSION_AGGRESSIVE
@@ -2760,13 +2762,24 @@ def diligenciar_formulario(id):
                                             new_width = int(img.width * (MAX_DIMENSION_AGGRESSIVE / img.height))
                                         img = img.resize((new_width, new_height), PILImage.Resampling.LANCZOS)
                                     
-                                    # Intentar de nuevo con calidad 70
+                                    # Intentar de nuevo con calidad más baja
                                     img_buffer.seek(0)
                                     img_buffer.truncate(0)
-                                    img.save(img_buffer, format='JPEG', quality=70, optimize=True, progressive=True)
-                                    optimized_size = len(img_buffer.getvalue())
-                                    final_quality = 70
-                                    print(f"DEBUG: Después de redimensionamiento agresivo: {optimized_size} bytes")
+                                    
+                                    # Intentar con calidades más bajas hasta que quepa
+                                    for quality in [60, 55, 50, 45]:
+                                        img_buffer.seek(0)
+                                        img_buffer.truncate(0)
+                                        img.save(img_buffer, format='JPEG', quality=quality, optimize=True, progressive=True)
+                                        optimized_size = len(img_buffer.getvalue())
+                                        if optimized_size <= MAX_FILE_SIZE:
+                                            final_quality = quality
+                                            print(f"DEBUG: Después de redimensionamiento agresivo: {optimized_size} bytes (calidad {quality}%)")
+                                            break
+                                    else:
+                                        # Si aún es muy grande, usar calidad 45 como último recurso
+                                        final_quality = 45
+                                        print(f"DEBUG: Después de redimensionamiento agresivo: {optimized_size} bytes (calidad {final_quality}% - último recurso)")
                                 
                                 reduction = ((original_file_size - optimized_size) / original_file_size * 100) if original_file_size > 0 else 0
                                 
