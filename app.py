@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_file, abort
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_file, abort, make_response
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -2517,7 +2517,13 @@ def eliminar_formulario(id):
 @login_required
 def diligenciar_formulario(id):
     """Diligenciar un formulario - técnicos y coordinadores"""
+    # Cargar formulario con campos ordenados
     formulario = Formulario.query.get_or_404(id)
+    
+    # Verificar si el formulario tiene demasiados campos (puede causar payload grande)
+    if formulario.campos and len(formulario.campos) > 100:
+        flash('Este formulario tiene demasiados campos. Por favor, contacte al administrador.', 'error')
+        return redirect(url_for('formularios'))
     
     if not formulario.activo:
         flash('Este formulario no está disponible', 'error')
@@ -2910,6 +2916,20 @@ def diligenciar_formulario(id):
         except Exception as e:
             db.session.rollback()
             flash('Error al diligenciar formulario: ' + str(e), 'error')
+    
+    # Optimizar datos del formulario para reducir el tamaño de la respuesta
+    # Limitar descripciones y configuraciones grandes antes de renderizar
+    for campo in formulario.campos:
+        # Truncar descripciones muy largas
+        if campo.descripcion and len(campo.descripcion) > 500:
+            campo.descripcion = campo.descripcion[:500] + '...'
+        # Truncar configuraciones muy grandes (JSON)
+        if campo.configuracion and len(campo.configuracion) > 5000:
+            campo.configuracion = campo.configuracion[:5000]
+    
+    # Truncar descripción del formulario si es muy larga
+    if formulario.descripcion and len(formulario.descripcion) > 1000:
+        formulario.descripcion = formulario.descripcion[:1000] + '...'
     
     return render_template('diligenciar_formulario.html', formulario=formulario)
 

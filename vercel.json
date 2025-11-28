@@ -22,7 +22,8 @@
   "functions": {
     "api/index.py": {
       "maxDuration": 30,
-      "memory": 1024
+      "memory": 1024,
+      "maxResponseSize": 4500000
     }
   }
 }
