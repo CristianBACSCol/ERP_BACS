@@ -2624,260 +2624,260 @@ def diligenciar_formulario(id):
                         print(f"DEBUG: Campo {campo.id} - Recibidos {len(archivos)} archivos (modo legacy)")
                         
                         for i, archivo in enumerate(archivos):
-                        print(f"DEBUG: Archivo {i+1}: {archivo.filename if archivo.filename else 'Sin nombre'}")
-                        if archivo and archivo.filename:
-                            # Validar tamaño del archivo antes de procesar (límite:  20MB)
-                            archivo.seek(0, 2)  # Ir al final
-                            file_size = archivo.tell()
-                            archivo.seek(0)  # Volver al inicio
-                            
-                            MAX_UPLOAD_SIZE = 10 * 1024 * 1024  # 10MB (reducido para evitar 413 en Vercel)
-                            if file_size > MAX_UPLOAD_SIZE:
-                                error_msg = f"El archivo {archivo.filename} es demasiado grande ({file_size / 1024 / 1024:.2f} MB). Máximo permitido: {MAX_UPLOAD_SIZE / 1024 / 1024:.0f} MB"
-                                print(f"ERROR: {error_msg}")
-                                flash(error_msg, 'error')
-                                continue
-                            
-                            print(f"DEBUG: Tamaño del archivo: {file_size / 1024 / 1024:.2f} MB")
-                            
-                            try:
-                                # Leer el archivo en memoria
-                                archivo.seek(0)
-                                file_data = archivo.read()
+                            print(f"DEBUG: Archivo {i+1}: {archivo.filename if archivo.filename else 'Sin nombre'}")
+                            if archivo and archivo.filename:
+                                # Validar tamaño del archivo antes de procesar (límite:  20MB)
+                                archivo.seek(0, 2)  # Ir al final
+                                file_size = archivo.tell()
+                                archivo.seek(0)  # Volver al inicio
                                 
-                                # Detectar formato de imagen por extensión o contenido
-                                file_extension = os.path.splitext(archivo.filename)[1].lower() if archivo.filename else ''
-                                
-                                # Si es HEIC/HEIF, registrar soporte ANTES de intentar abrir
-                                if file_extension in ['.heic', '.heif']:
-                                    try:
-                                        from pillow_heif import register_heif_opener
-                                        register_heif_opener()
-                                        print(f"DEBUG: Soporte HEIC registrado para {archivo.filename}")
-                                    except ImportError:
-                                        error_msg = f"ERROR: No se puede procesar imagen HEIC. Instala pillow-heif: pip install pillow-heif"
-                                        print(error_msg)
-                                        raise Exception(error_msg)
-                                    except Exception as heif_error:
-                                        error_msg = f"ERROR: No se pudo registrar soporte HEIC: {heif_error}"
-                                        print(error_msg)
-                                        raise Exception(error_msg)
-                                
-                                # Abrir imagen con PIL - soporta múltiples formatos
-                                from io import BytesIO
-                                img = None
-                                
-                                # Intentar abrir la imagen
-                                try:
-                                    img = PILImage.open(BytesIO(file_data))
-                                    print(f"DEBUG: Imagen abierta - Formato: {img.format}, Modo: {img.mode}, Tamaño: {img.size}")
-                                except Exception as open_error:
-                                    # Si falla y es HEIC, dar mensaje más específico
-                                    if file_extension in ['.heic', '.heif']:
-                                        error_msg = f"ERROR: No se pudo abrir imagen HEIC '{archivo.filename}'. Asegúrate de que pillow-heif esté instalado: pip install pillow-heif"
-                                        print(error_msg)
-                                        raise Exception(error_msg)
-                                    else:
-                                        error_msg = f"ERROR: No se pudo abrir imagen '{archivo.filename}': {open_error}"
-                                        print(error_msg)
-                                        raise Exception(error_msg)
-                                
-                                if img is None:
-                                    raise Exception("No se pudo abrir la imagen")
-                                
-                                # Convertir a RGB si es necesario (para PNG, HEIC, etc. con transparencia)
-                                if img.mode in ('RGBA', 'LA', 'P'):
-                                    # Crear fondo blanco para imágenes con transparencia
-                                    bg = PILImage.new("RGB", img.size, (255, 255, 255))
-                                    if img.mode == 'P':
-                                        img = img.convert('RGBA')
-                                    if img.mode == 'RGBA':
-                                        bg.paste(img, mask=img.split()[3])
-                                    else:
-                                        bg.paste(img)
-                                    img = bg
-                                elif img.mode not in ('RGB', 'L'):
-                                    # Convertir cualquier otro modo a RGB
-                                    if img.mode == 'L':  # Escala de grises
-                                        img = img.convert('RGB')
-                                    else:
-                                        img = img.convert('RGB')
-                                
-                                # Mantener tamaño y resolución original
-                                original_size = img.size
-                                original_format = img.format
-                                original_file_size = len(file_data)
-                                
-                                # Redimensionar si la imagen es muy grande (para evitar payloads muy grandes)
-                                # Límite reducido: 3000px en la dimensión más grande (más agresivo)
-                                MAX_DIMENSION = 3000
-                                needs_resize = False
-                                if img.width > MAX_DIMENSION or img.height > MAX_DIMENSION:
-                                    needs_resize = True
-                                    if img.width > img.height:
-                                        new_width = MAX_DIMENSION
-                                        new_height = int(img.height * (MAX_DIMENSION / img.width))
-                                    else:
-                                        new_height = MAX_DIMENSION
-                                        new_width = int(img.width * (MAX_DIMENSION / img.height))
-                                    img = img.resize((new_width, new_height), PILImage.Resampling.LANCZOS)
-                                    print(f"DEBUG: Imagen redimensionada de {original_size} a {img.size} (límite: {MAX_DIMENSION}px)")
-                                
-                                # Optimizar peso usando compresión JPG progresiva con calidad adaptativa
-                                # Comenzar con calidad 85, reducir si es necesario para cumplir límite de Vercel (4.5MB)
-                                # Reducido a 2MB para dejar más margen para otros datos del request
-                                MAX_FILE_SIZE = 2 * 1024 * 1024  # 2MB (margen seguro para evitar 413 en Vercel)
-                                img_buffer = BytesIO()
-                                
-                                # Intentar diferentes niveles de calidad hasta que el archivo sea menor a 2MB
-                                # Empezar con calidad más baja para archivos más pequeños
-                                quality_levels = [85, 80, 75, 70, 65, 60, 55, 50]
-                                optimized_size = 0
-                                final_quality = 90
-                                
-                                for quality in quality_levels:
-                                    img_buffer.seek(0)
-                                    img_buffer.truncate(0)
-                                    
-                                    save_kwargs = {
-                                        'format': 'JPEG',
-                                        'quality': quality,
-                                        'optimize': True,
-                                        'progressive': True,
-                                    }
-                                    
-                                    img.save(img_buffer, **save_kwargs)
-                                    optimized_size = len(img_buffer.getvalue())
-                                    
-                                    if optimized_size <= MAX_FILE_SIZE:
-                                        final_quality = quality
-                                        print(f"DEBUG: Calidad {quality}% produce archivo de {optimized_size} bytes (dentro del límite)")
-                                        break
-                                    else:
-                                        print(f"DEBUG: Calidad {quality}% produce archivo de {optimized_size} bytes (demasiado grande, probando siguiente nivel)")
-                                
-                                # Si aún es muy grande, redimensionar más agresivamente
-                                if optimized_size > MAX_FILE_SIZE:
-                                    print(f"DEBUG: Archivo aún muy grande ({optimized_size} bytes), redimensionando más agresivamente...")
-                                    # Redimensionar a máximo 2000px (más agresivo)
-                                    MAX_DIMENSION_AGGRESSIVE = 2000
-                                    if img.width > MAX_DIMENSION_AGGRESSIVE or img.height > MAX_DIMENSION_AGGRESSIVE:
-                                        if img.width > img.height:
-                                            new_width = MAX_DIMENSION_AGGRESSIVE
-                                            new_height = int(img.height * (MAX_DIMENSION_AGGRESSIVE / img.width))
-                                        else:
-                                            new_height = MAX_DIMENSION_AGGRESSIVE
-                                            new_width = int(img.width * (MAX_DIMENSION_AGGRESSIVE / img.height))
-                                        img = img.resize((new_width, new_height), PILImage.Resampling.LANCZOS)
-                                    
-                                    # Intentar de nuevo con calidad más baja
-                                    img_buffer.seek(0)
-                                    img_buffer.truncate(0)
-                                    
-                                    # Intentar con calidades más bajas hasta que quepa
-                                    for quality in [60, 55, 50, 45]:
-                                        img_buffer.seek(0)
-                                        img_buffer.truncate(0)
-                                        img.save(img_buffer, format='JPEG', quality=quality, optimize=True, progressive=True)
-                                        optimized_size = len(img_buffer.getvalue())
-                                        if optimized_size <= MAX_FILE_SIZE:
-                                            final_quality = quality
-                                            print(f"DEBUG: Después de redimensionamiento agresivo: {optimized_size} bytes (calidad {quality}%)")
-                                            break
-                                    else:
-                                        # Si aún es muy grande, usar calidad 45 como último recurso
-                                        final_quality = 45
-                                        print(f"DEBUG: Después de redimensionamiento agresivo: {optimized_size} bytes (calidad {final_quality}% - último recurso)")
-                                
-                                reduction = ((original_file_size - optimized_size) / original_file_size * 100) if original_file_size > 0 else 0
-                                
-                                resize_info = f" (redimensionada de {original_size})" if needs_resize else ""
-                                print(f"DEBUG: Imagen optimizada - Original: {original_file_size} bytes, Optimizado: {optimized_size} bytes ({final_quality}% calidad){resize_info}, Reducción: {reduction:.1f}%")
-                                
-                                img_buffer.seek(0)
-                                
-                                # Generar nombre único con extensión .jpg (siempre JPG)
-                                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                                unique_filename = f'foto_{campo.id}_{respuesta_formulario.id}_{timestamp}_{i+1}.jpg'
-                                
-                                # Ruta en R2: Formularios/imagenes/nombre_archivo
-                                r2_path = f'Formularios/imagenes/{unique_filename}'
-                                
-                                print(f"DEBUG: Guardando imagen optimizada en R2 como: {r2_path} (Formato original: {original_format})")
-                                print(f"DEBUG: Tamaño del buffer a subir: {len(img_buffer.getvalue())} bytes")
-                                
-                                # Verificar que el buffer tenga datos
-                                img_buffer.seek(0)
-                                if len(img_buffer.getvalue()) == 0:
-                                    print(f"ERROR: Buffer de imagen está vacío, no se puede subir")
+                                MAX_UPLOAD_SIZE = 10 * 1024 * 1024  # 10MB (reducido para evitar 413 en Vercel)
+                                if file_size > MAX_UPLOAD_SIZE:
+                                    error_msg = f"El archivo {archivo.filename} es demasiado grande ({file_size / 1024 / 1024:.2f} MB). Máximo permitido: {MAX_UPLOAD_SIZE / 1024 / 1024:.0f} MB"
+                                    print(f"ERROR: {error_msg}")
+                                    flash(error_msg, 'error')
                                     continue
                                 
-                                img_buffer.seek(0)
-                                if upload_file_to_r2(img_buffer, r2_path, content_type='image/jpeg'):
-                                    nombres_archivos.append(unique_filename)
-                                    print(f"DEBUG: ✅ Archivo guardado exitosamente en R2: {unique_filename} (Tamaño: {original_size}, Reducción: {reduction:.1f}%)")
-                                    
-                                    # Verificar que el archivo realmente se subió
-                                    if file_exists_in_r2(r2_path):
-                                        print(f"DEBUG: ✅ Verificación: Archivo confirmado en R2: {r2_path}")
-                                    else:
-                                        print(f"ERROR: ⚠️ Archivo no encontrado en R2 después de subir: {r2_path}")
-                                else:
-                                    print(f"ERROR: ❌ Error al guardar archivo en R2: {unique_filename}")
-                                    
-                            except Exception as img_error:
-                                print(f"ERROR procesando imagen {archivo.filename}: {img_error}")
-                                import traceback
-                                traceback.print_exc()
-                                # Fallback: intentar métodos alternativos
+                                print(f"DEBUG: Tamaño del archivo: {file_size / 1024 / 1024:.2f} MB")
+                                
                                 try:
-                                    print(f"DEBUG: Intentando método alternativo para {archivo.filename}")
+                                    # Leer el archivo en memoria
                                     archivo.seek(0)
                                     file_data = archivo.read()
+                                
+                                    # Detectar formato de imagen por extensión o contenido
+                                    file_extension = os.path.splitext(archivo.filename)[1].lower() if archivo.filename else ''
+                                    
+                                    # Si es HEIC/HEIF, registrar soporte ANTES de intentar abrir
+                                    if file_extension in ['.heic', '.heif']:
+                                        try:
+                                            from pillow_heif import register_heif_opener
+                                            register_heif_opener()
+                                            print(f"DEBUG: Soporte HEIC registrado para {archivo.filename}")
+                                        except ImportError:
+                                            error_msg = f"ERROR: No se puede procesar imagen HEIC. Instala pillow-heif: pip install pillow-heif"
+                                            print(error_msg)
+                                            raise Exception(error_msg)
+                                        except Exception as heif_error:
+                                            error_msg = f"ERROR: No se pudo registrar soporte HEIC: {heif_error}"
+                                            print(error_msg)
+                                            raise Exception(error_msg)
+                                    
+                                    # Abrir imagen con PIL - soporta múltiples formatos
                                     from io import BytesIO
-                                    # Asegurar que PILImage esté disponible
-                                    from PIL import Image as PILImage
+                                    img = None
                                     
-                                    # Intentar registrar HEIC si no se hizo antes
+                                    # Intentar abrir la imagen
                                     try:
-                                        from pillow_heif import register_heif_opener
-                                        register_heif_opener()
-                                    except:
-                                        pass
+                                        img = PILImage.open(BytesIO(file_data))
+                                        print(f"DEBUG: Imagen abierta - Formato: {img.format}, Modo: {img.mode}, Tamaño: {img.size}")
+                                    except Exception as open_error:
+                                        # Si falla y es HEIC, dar mensaje más específico
+                                        if file_extension in ['.heic', '.heif']:
+                                            error_msg = f"ERROR: No se pudo abrir imagen HEIC '{archivo.filename}'. Asegúrate de que pillow-heif esté instalado: pip install pillow-heif"
+                                            print(error_msg)
+                                            raise Exception(error_msg)
+                                        else:
+                                            error_msg = f"ERROR: No se pudo abrir imagen '{archivo.filename}': {open_error}"
+                                            print(error_msg)
+                                            raise Exception(error_msg)
                                     
-                                    img = PILImage.open(BytesIO(file_data))
+                                    if img is None:
+                                        raise Exception("No se pudo abrir la imagen")
                                     
-                                    # Convertir a RGB
-                                    if img.mode != 'RGB':
-                                        if img.mode in ('RGBA', 'LA', 'P'):
-                                            bg = PILImage.new("RGB", img.size, (255, 255, 255))
-                                            if img.mode == 'P':
-                                                img = img.convert('RGBA')
-                                            if img.mode == 'RGBA':
-                                                bg.paste(img, mask=img.split()[3])
-                                            else:
-                                                bg.paste(img)
-                                            img = bg
+                                    # Convertir a RGB si es necesario (para PNG, HEIC, etc. con transparencia)
+                                    if img.mode in ('RGBA', 'LA', 'P'):
+                                        # Crear fondo blanco para imágenes con transparencia
+                                        bg = PILImage.new("RGB", img.size, (255, 255, 255))
+                                        if img.mode == 'P':
+                                            img = img.convert('RGBA')
+                                        if img.mode == 'RGBA':
+                                            bg.paste(img, mask=img.split()[3])
+                                        else:
+                                            bg.paste(img)
+                                        img = bg
+                                    elif img.mode not in ('RGB', 'L'):
+                                        # Convertir cualquier otro modo a RGB
+                                        if img.mode == 'L':  # Escala de grises
+                                            img = img.convert('RGB')
                                         else:
                                             img = img.convert('RGB')
                                     
-                                    # Guardar como JPG optimizado
+                                    # Mantener tamaño y resolución original
+                                    original_size = img.size
+                                    original_format = img.format
+                                    original_file_size = len(file_data)
+                                    
+                                    # Redimensionar si la imagen es muy grande (para evitar payloads muy grandes)
+                                    # Límite reducido: 3000px en la dimensión más grande (más agresivo)
+                                    MAX_DIMENSION = 3000
+                                    needs_resize = False
+                                    if img.width > MAX_DIMENSION or img.height > MAX_DIMENSION:
+                                        needs_resize = True
+                                        if img.width > img.height:
+                                            new_width = MAX_DIMENSION
+                                            new_height = int(img.height * (MAX_DIMENSION / img.width))
+                                        else:
+                                            new_height = MAX_DIMENSION
+                                            new_width = int(img.width * (MAX_DIMENSION / img.height))
+                                        img = img.resize((new_width, new_height), PILImage.Resampling.LANCZOS)
+                                        print(f"DEBUG: Imagen redimensionada de {original_size} a {img.size} (límite: {MAX_DIMENSION}px)")
+                                    
+                                    # Optimizar peso usando compresión JPG progresiva con calidad adaptativa
+                                    # Comenzar con calidad 85, reducir si es necesario para cumplir límite de Vercel (4.5MB)
+                                    # Reducido a 2MB para dejar más margen para otros datos del request
+                                    MAX_FILE_SIZE = 2 * 1024 * 1024  # 2MB (margen seguro para evitar 413 en Vercel)
                                     img_buffer = BytesIO()
-                                    img.save(img_buffer, format='JPEG', quality=90, optimize=True, progressive=True)
+                                    
+                                    # Intentar diferentes niveles de calidad hasta que el archivo sea menor a 2MB
+                                    # Empezar con calidad más baja para archivos más pequeños
+                                    quality_levels = [85, 80, 75, 70, 65, 60, 55, 50]
+                                    optimized_size = 0
+                                    final_quality = 90
+                                    
+                                    for quality in quality_levels:
+                                        img_buffer.seek(0)
+                                        img_buffer.truncate(0)
+                                        
+                                        save_kwargs = {
+                                            'format': 'JPEG',
+                                            'quality': quality,
+                                            'optimize': True,
+                                            'progressive': True,
+                                        }
+                                        
+                                        img.save(img_buffer, **save_kwargs)
+                                        optimized_size = len(img_buffer.getvalue())
+                                        
+                                        if optimized_size <= MAX_FILE_SIZE:
+                                            final_quality = quality
+                                            print(f"DEBUG: Calidad {quality}% produce archivo de {optimized_size} bytes (dentro del límite)")
+                                            break
+                                        else:
+                                            print(f"DEBUG: Calidad {quality}% produce archivo de {optimized_size} bytes (demasiado grande, probando siguiente nivel)")
+                                    
+                                    # Si aún es muy grande, redimensionar más agresivamente
+                                    if optimized_size > MAX_FILE_SIZE:
+                                        print(f"DEBUG: Archivo aún muy grande ({optimized_size} bytes), redimensionando más agresivamente...")
+                                        # Redimensionar a máximo 2000px (más agresivo)
+                                        MAX_DIMENSION_AGGRESSIVE = 2000
+                                        if img.width > MAX_DIMENSION_AGGRESSIVE or img.height > MAX_DIMENSION_AGGRESSIVE:
+                                            if img.width > img.height:
+                                                new_width = MAX_DIMENSION_AGGRESSIVE
+                                                new_height = int(img.height * (MAX_DIMENSION_AGGRESSIVE / img.width))
+                                            else:
+                                                new_height = MAX_DIMENSION_AGGRESSIVE
+                                                new_width = int(img.width * (MAX_DIMENSION_AGGRESSIVE / img.height))
+                                            img = img.resize((new_width, new_height), PILImage.Resampling.LANCZOS)
+                                        
+                                        # Intentar de nuevo con calidad más baja
+                                        img_buffer.seek(0)
+                                        img_buffer.truncate(0)
+                                        
+                                        # Intentar con calidades más bajas hasta que quepa
+                                        for quality in [60, 55, 50, 45]:
+                                            img_buffer.seek(0)
+                                            img_buffer.truncate(0)
+                                            img.save(img_buffer, format='JPEG', quality=quality, optimize=True, progressive=True)
+                                            optimized_size = len(img_buffer.getvalue())
+                                            if optimized_size <= MAX_FILE_SIZE:
+                                                final_quality = quality
+                                                print(f"DEBUG: Después de redimensionamiento agresivo: {optimized_size} bytes (calidad {quality}%)")
+                                                break
+                                        else:
+                                            # Si aún es muy grande, usar calidad 45 como último recurso
+                                            final_quality = 45
+                                            print(f"DEBUG: Después de redimensionamiento agresivo: {optimized_size} bytes (calidad {final_quality}% - último recurso)")
+                                    
+                                    reduction = ((original_file_size - optimized_size) / original_file_size * 100) if original_file_size > 0 else 0
+                                    
+                                    resize_info = f" (redimensionada de {original_size})" if needs_resize else ""
+                                    print(f"DEBUG: Imagen optimizada - Original: {original_file_size} bytes, Optimizado: {optimized_size} bytes ({final_quality}% calidad){resize_info}, Reducción: {reduction:.1f}%")
+                                    
                                     img_buffer.seek(0)
                                     
+                                    # Generar nombre único con extensión .jpg (siempre JPG)
                                     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                                     unique_filename = f'foto_{campo.id}_{respuesta_formulario.id}_{timestamp}_{i+1}.jpg'
+                                    
+                                    # Ruta en R2: Formularios/imagenes/nombre_archivo
                                     r2_path = f'Formularios/imagenes/{unique_filename}'
+                                    
+                                    print(f"DEBUG: Guardando imagen optimizada en R2 como: {r2_path} (Formato original: {original_format})")
+                                    print(f"DEBUG: Tamaño del buffer a subir: {len(img_buffer.getvalue())} bytes")
+                                    
+                                    # Verificar que el buffer tenga datos
+                                    img_buffer.seek(0)
+                                    if len(img_buffer.getvalue()) == 0:
+                                        print(f"ERROR: Buffer de imagen está vacío, no se puede subir")
+                                        continue
+                                    
+                                    img_buffer.seek(0)
                                     if upload_file_to_r2(img_buffer, r2_path, content_type='image/jpeg'):
                                         nombres_archivos.append(unique_filename)
-                                        print(f"DEBUG: Archivo guardado como fallback (convertido a JPG): {unique_filename}")
+                                        print(f"DEBUG: ✅ Archivo guardado exitosamente en R2: {unique_filename} (Tamaño: {original_size}, Reducción: {reduction:.1f}%)")
+                                        
+                                        # Verificar que el archivo realmente se subió
+                                        if file_exists_in_r2(r2_path):
+                                            print(f"DEBUG: ✅ Verificación: Archivo confirmado en R2: {r2_path}")
+                                        else:
+                                            print(f"ERROR: ⚠️ Archivo no encontrado en R2 después de subir: {r2_path}")
                                     else:
-                                        print(f"ERROR: No se pudo guardar archivo en fallback")
-                                except Exception as fallback_error:
-                                    print(f"ERROR en fallback: {fallback_error}")
+                                        print(f"ERROR: ❌ Error al guardar archivo en R2: {unique_filename}")
+                                        
+                                except Exception as img_error:
+                                    print(f"ERROR procesando imagen {archivo.filename}: {img_error}")
                                     import traceback
                                     traceback.print_exc()
+                                    # Fallback: intentar métodos alternativos
+                                    try:
+                                        print(f"DEBUG: Intentando método alternativo para {archivo.filename}")
+                                        archivo.seek(0)
+                                        file_data = archivo.read()
+                                        from io import BytesIO
+                                        # Asegurar que PILImage esté disponible
+                                        from PIL import Image as PILImage
+                                        
+                                        # Intentar registrar HEIC si no se hizo antes
+                                        try:
+                                            from pillow_heif import register_heif_opener
+                                            register_heif_opener()
+                                        except:
+                                            pass
+                                        
+                                        img = PILImage.open(BytesIO(file_data))
+                                        
+                                        # Convertir a RGB
+                                        if img.mode != 'RGB':
+                                            if img.mode in ('RGBA', 'LA', 'P'):
+                                                bg = PILImage.new("RGB", img.size, (255, 255, 255))
+                                                if img.mode == 'P':
+                                                    img = img.convert('RGBA')
+                                                if img.mode == 'RGBA':
+                                                    bg.paste(img, mask=img.split()[3])
+                                                else:
+                                                    bg.paste(img)
+                                                img = bg
+                                            else:
+                                                img = img.convert('RGB')
+                                        
+                                        # Guardar como JPG optimizado
+                                        img_buffer = BytesIO()
+                                        img.save(img_buffer, format='JPEG', quality=90, optimize=True, progressive=True)
+                                        img_buffer.seek(0)
+                                        
+                                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                                        unique_filename = f'foto_{campo.id}_{respuesta_formulario.id}_{timestamp}_{i+1}.jpg'
+                                        r2_path = f'Formularios/imagenes/{unique_filename}'
+                                        if upload_file_to_r2(img_buffer, r2_path, content_type='image/jpeg'):
+                                            nombres_archivos.append(unique_filename)
+                                            print(f"DEBUG: Archivo guardado como fallback (convertido a JPG): {unique_filename}")
+                                        else:
+                                            print(f"ERROR: No se pudo guardar archivo en fallback")
+                                    except Exception as fallback_error:
+                                        print(f"ERROR en fallback: {fallback_error}")
+                                        import traceback
+                                        traceback.print_exc()
                     
                     if nombres_archivos:
                         respuesta_campo.valor_archivo = ','.join(nombres_archivos)
