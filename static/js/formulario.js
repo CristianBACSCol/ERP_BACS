@@ -678,6 +678,7 @@ if (formulario) {
         }
         
         // Validar que todos los archivos de imagen estén optimizados y sean menores a 0.5MB
+        // NOTA: Los archivos HEIC se permiten porque el backend los procesará automáticamente
         const MAX_FILE_SIZE = 0.5 * 1024 * 1024; // 0.5MB
         let archivosGrandes = [];
         let archivosHEIC = [];
@@ -687,15 +688,20 @@ if (formulario) {
                 for (let i = 0; i < input.files.length; i++) {
                     const file = input.files[i];
                     
-                    // Verificar si es HEIC sin convertir
-                    if (file.name.toLowerCase().endsWith('.heic') || 
-                        file.name.toLowerCase().endsWith('.heif') ||
-                        file.type === 'image/heic' ||
-                        file.type === 'image/heif') {
+                    // Detectar HEIC (se permiten porque el backend los procesará)
+                    const isHeic = file.name.toLowerCase().endsWith('.heic') || 
+                                  file.name.toLowerCase().endsWith('.heif') ||
+                                  file.type === 'image/heic' ||
+                                  file.type === 'image/heif';
+                    
+                    if (isHeic) {
                         archivosHEIC.push(file.name);
+                        console.log(`DEBUG: [v2.0] Archivo HEIC permitido para envío: ${file.name} - El backend lo procesará`);
+                        // NO bloquear HEIC - el backend los procesará
+                        continue;
                     }
                     
-                    // Verificar tamaño
+                    // Verificar tamaño solo para archivos NO-HEIC
                     if (file.size > MAX_FILE_SIZE) {
                         archivosGrandes.push({
                             nombre: file.name,
@@ -706,11 +712,9 @@ if (formulario) {
             }
         });
         
+        // NO bloquear HEIC - el backend los procesará automáticamente
         if (archivosHEIC.length > 0) {
-            e.preventDefault();
-            alert('❌ ERROR: Se detectaron archivos HEIC sin convertir:\n' + archivosHEIC.join('\n') + 
-                  '\n\nPor favor, espera a que se completen la conversión y optimización antes de enviar.');
-            return false;
+            console.log(`DEBUG: [v2.0] Se enviarán ${archivosHEIC.length} archivo(s) HEIC al backend para procesamiento automático`);
         }
         
         if (archivosGrandes.length > 0) {
@@ -723,7 +727,7 @@ if (formulario) {
             return false;
         }
         
-        console.log('✅ Validación de archivos completada - Todos los archivos están optimizados');
+        console.log('✅ Validación de archivos completada - Archivos HEIC serán procesados por el backend');
         
         const firmasObligatorias = document.querySelectorAll('.firma-canvas');
         for (let canvas of firmasObligatorias) {
