@@ -16,10 +16,12 @@ except Exception as e:
     print(f"Warning: No se pudo cambiar directorio: {e}")
 
 # Importar la aplicación Flask con manejo de errores
+import_error = None
 try:
     from app import app
     print("✅ Aplicación Flask importada correctamente")
 except Exception as e:
+    import_error = str(e)
     print(f"❌ Error importando aplicación Flask: {e}")
     import traceback
     traceback.print_exc()
@@ -28,7 +30,8 @@ except Exception as e:
     app = Flask(__name__)
     @app.route('/')
     def error():
-        return f"Error cargando aplicación: {str(e)}", 500
+        error_msg = import_error if import_error else "Error desconocido al cargar la aplicación"
+        return f"Error cargando aplicación: {error_msg}", 500
 
 # Vercel detecta automáticamente la app Flask cuando se exporta como 'app'
 # No necesitamos un handler personalizado, Flask funciona directamente con Vercel
