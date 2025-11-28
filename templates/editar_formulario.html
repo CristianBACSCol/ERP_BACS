@@ -63,10 +63,10 @@
                             {% endif %}
                         </div>
                         <div class="campo-actions">
-                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="editarCampo({{ campo.id }})" title="Editar campo">
+                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="editarCampo(`{{ campo.id }}`)" title="Editar campo">
                                 <i class="icon-edit"></i>
                             </button>
-                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="eliminarCampo({{ campo.id }})" title="Eliminar campo">
+                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="eliminarCampo(`{{ campo.id }}`)" title="Eliminar campo">
                                 <i class="icon-trash"></i>
                             </button>
                         </div>

@@ -354,8 +354,10 @@
 
 .foto-item img {
     width: 100%;
-    height: 120px;
-    object-fit: cover;
+    max-width: 100%;
+    height: auto;
+    max-height: 120px;
+    object-fit: contain;
     display: block;
 }
 
@@ -413,6 +415,21 @@ select.form-control, .menu-select, .form-control {
 @media (max-width: 576px) {
     .form-scroll-spacer { height: 120px; }
     .form-container { padding-bottom: 120px; }
+    
+    /* Reducir aún más las imágenes en pantallas muy pequeñas */
+    .foto-item img {
+        max-width: 100%;
+        width: 100%;
+        height: auto;
+        max-height: 60px;
+        object-fit: contain;
+        display: block;
+    }
+    
+    .fotos-grid {
+        grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+        gap: 5px;
+    }
 }
 
 @media (max-width: 768px) {
@@ -423,6 +440,21 @@ select.form-control, .menu-select, .form-control {
     
     .firma-controls {
         flex-direction: column;
+    }
+    
+    /* Reducir tamaño de imágenes en móviles */
+    .foto-item img {
+        max-width: 100%;
+        width: 100%;
+        height: auto;
+        max-height: 80px;
+        object-fit: contain;
+        display: block;
+    }
+    
+    .fotos-grid {
+        grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+        gap: 8px;
     }
 }
 </style>
@@ -655,13 +687,22 @@ function inicializarPreviewsFotos() {
                     const optimizedFiles = [];
                     
                     for (const file of files) {
-                        // Solo optimizar si es una imagen
-                        if (file.type.startsWith('image/')) {
+                        // Verificar si es una imagen (incluyendo HEIC)
+                        const isImage = file.type.startsWith('image/') || 
+                                       file.name.toLowerCase().endsWith('.heic') ||
+                                       file.name.toLowerCase().endsWith('.heif');
+                        
+                        if (isImage) {
                             try {
                                 const optimizedFile = await optimizarImagen(file);
                                 optimizedFiles.push(optimizedFile);
                             } catch (error) {
                                 console.error('Error optimizando imagen:', error);
+                                // Si falla la optimización, intentar convertir HEIC a JPEG
+                                if (file.name.toLowerCase().endsWith('.heic') || 
+                                    file.name.toLowerCase().endsWith('.heif')) {
+                                    console.warn('HEIC no soportado directamente, se intentará procesar como imagen');
+                                }
                                 // Si falla la optimización, usar el archivo original
                                 optimizedFiles.push(file);
                             }
