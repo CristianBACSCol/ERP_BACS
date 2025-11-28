@@ -197,7 +197,7 @@
     </div>
 
     <!-- Modal de confirmación para eliminar (flotante) -->
-    <div class="modal" id="confirmModal" style="display: none;">
+    <div class="modal" id="confirmModal" style="display: none;" onclick="if(event.target === this) cerrarModalConfirmacion()">
         <div class="modal-content modal-small">
             <div class="modal-header">
                 <h3>Confirmar Eliminación</h3>
@@ -296,6 +296,37 @@
     max-width: 400px;
 }
 
+/* Mejoras responsive para modales */
+@media (max-width: 768px) {
+    .modal-large {
+        max-width: 95%;
+        margin: 10px auto;
+    }
+    
+    .modal-small {
+        max-width: 95%;
+        margin: 10px auto;
+    }
+    
+    .modal-header {
+        padding: 15px;
+    }
+    
+    .modal-body {
+        padding: 15px;
+    }
+    
+    .modal-footer {
+        padding: 15px;
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    .modal-footer .btn {
+        width: 100%;
+    }
+}
+
 .modal-close {
     background: none;
     border: none;
@@ -377,6 +408,10 @@ function mostrarModalAgregarCampo() {
     document.getElementById('campoForm').reset();
     document.getElementById('configuracionEspecifica').style.display = 'none';
     document.getElementById('campoModal').style.display = 'block';
+    // Prevenir scroll del body cuando el modal está abierto
+    document.body.style.overflow = 'hidden';
+    // Scroll al inicio del modal
+    document.getElementById('campoModal').scrollTop = 0;
 }
 
 function editarCampo(campoId) {
@@ -409,6 +444,10 @@ function editarCampo(campoId) {
     }
     
     document.getElementById('campoModal').style.display = 'block';
+    // Prevenir scroll del body cuando el modal está abierto
+    document.body.style.overflow = 'hidden';
+    // Scroll al inicio del modal
+    document.getElementById('campoModal').scrollTop = 0;
 }
 
 function eliminarCampo(campoId) {
@@ -416,6 +455,10 @@ function eliminarCampo(campoId) {
         eliminarCampoConfirmado(campoId);
     };
     document.getElementById('confirmModal').style.display = 'block';
+    // Prevenir scroll del body cuando el modal está abierto
+    document.body.style.overflow = 'hidden';
+    // Scroll al inicio del modal
+    document.getElementById('confirmModal').scrollTop = 0;
 }
 
 function eliminarCampoConfirmado(campoId) {
@@ -598,23 +641,29 @@ function guardarCampo() {
 
 function cerrarModalCampo() {
     document.getElementById('campoModal').style.display = 'none';
+    // Restaurar scroll del body
+    document.body.style.overflow = '';
 }
 
 function cerrarModalConfirmacion() {
     document.getElementById('confirmModal').style.display = 'none';
+    // Restaurar scroll del body
+    document.body.style.overflow = '';
 }
 
-// Cerrar modales al hacer clic fuera de ellos
-window.onclick = function(event) {
-    const campoModal = document.getElementById('campoModal');
-    const confirmModal = document.getElementById('confirmModal');
-    
-    if (event.target === campoModal) {
-        cerrarModalCampo();
+// Cerrar modales con tecla Escape
+document.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape') {
+        const campoModal = document.getElementById('campoModal');
+        const confirmModal = document.getElementById('confirmModal');
+        
+        if (campoModal && campoModal.style.display === 'block') {
+            cerrarModalCampo();
+        }
+        if (confirmModal && confirmModal.style.display === 'block') {
+            cerrarModalConfirmacion();
+        }
     }
-    if (event.target === confirmModal) {
-        cerrarModalConfirmacion();
-    }
-}
+});
 </script>
 {% endblock %}

@@ -57,17 +57,37 @@
     height: 100%;
     background-color: rgba(0, 0, 0, 0.5);
     animation: fadeIn 0.3s ease;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch; /* Smooth scrolling en iOS */
 }
 
 .modal-content {
     background-color: #fff;
-    margin: 15% auto;
+    margin: 5% auto;
     padding: 0;
     border-radius: 8px;
     width: 90%;
     max-width: 500px;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
     animation: slideIn 0.3s ease;
+    position: relative;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Ajustes para móviles */
+@media (max-width: 768px) {
+    .modal-content {
+        margin: 10px auto;
+        width: 95%;
+        max-height: calc(100vh - 20px);
+        border-radius: 8px 8px 0 0;
+    }
+    
+    .modal {
+        padding: 0;
+    }
 }
 
 .modal-header {
@@ -109,6 +129,17 @@
 
 .modal-body {
     padding: 20px;
+    overflow-y: auto;
+    flex: 1;
+    max-height: calc(90vh - 140px); /* Altura máxima considerando header y footer */
+}
+
+/* Ajustes para móviles en modal-body */
+@media (max-width: 768px) {
+    .modal-body {
+        max-height: calc(100vh - 180px); /* Más espacio en móviles */
+        padding: 15px;
+    }
 }
 
 .modal-body p {
