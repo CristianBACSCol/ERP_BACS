@@ -68,8 +68,8 @@
 }
 
 /* Cuando el modal está visible, usar flex */
-.modal[style*="display: block"],
-.modal:not([style*="display: none"]) {
+.modal[style*="display: flex"],
+.modal[style*="display:block"] {
     display: flex !important;
 }
 
@@ -90,6 +90,10 @@
     margin-top: 20px;
     margin-bottom: 20px;
     flex-shrink: 0;
+    /* Permitir que el contenido determine la altura mínima pero respetar max-height */
+    min-height: auto;
+    /* Asegurar que el fondo se adapte al contenido */
+    overflow: hidden;
 }
 
 /* Ajustes para móviles */
@@ -117,6 +121,7 @@
     align-items: center;
     background-color: #f8f9fa;
     border-radius: 8px 8px 0 0;
+    flex-shrink: 0; /* No se encoge */
 }
 
 .modal-header h3 {
@@ -150,17 +155,19 @@
     padding: 20px;
     overflow-y: auto;
     overflow-x: hidden;
-    flex: 1;
+    flex: 1 1 auto; /* Permite que crezca y se encoja según el contenido */
     min-height: 0; /* Permite que el flex funcione correctamente */
-    /* El scroll interno se manejará automáticamente por el flex */
-    max-height: calc(100vh - 200px); /* Altura máxima considerando header y footer */
+    /* El scroll interno se manejará automáticamente cuando el contenido exceda la altura disponible */
+    /* Calcular altura máxima dinámicamente basada en el viewport */
+    max-height: calc(100vh - 180px); /* Considerando header (~60px) + footer (~60px) + padding (40px) + margen (20px) */
+    /* Asegurar que el fondo se adapte al contenido */
+    background-color: #fff;
 }
 
 /* Ajustes para móviles en modal-body */
 @media (max-width: 768px) {
     .modal-body {
         padding: 15px;
-        max-height: calc(100vh - 150px);
     }
 }
 
