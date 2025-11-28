@@ -48,7 +48,7 @@
 
 /* Estilos para Modal */
 .modal {
-    display: none;
+    display: none; /* Se cambiará a flex cuando se muestre */
     position: fixed;
     z-index: 1000;
     left: 0;
@@ -60,12 +60,22 @@
     overflow-y: auto;
     overflow-x: hidden;
     -webkit-overflow-scrolling: touch; /* Smooth scrolling en iOS */
-    /* Prevenir scroll del body cuando el modal está abierto */
+    /* Centrar el contenido verticalmente */
+    align-items: flex-start;
+    justify-content: center;
+    padding: 20px;
+    box-sizing: border-box;
+}
+
+/* Cuando el modal está visible, usar flex */
+.modal[style*="display: block"],
+.modal:not([style*="display: none"]) {
+    display: flex !important;
 }
 
 .modal-content {
     background-color: #fff;
-    margin: 5% auto;
+    margin: auto;
     padding: 0;
     border-radius: 8px;
     width: 90%;
@@ -73,16 +83,22 @@
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
     animation: slideIn 0.3s ease;
     position: relative;
-    max-height: 90vh;
+    max-height: calc(100vh - 40px);
     display: flex;
     flex-direction: column;
-    /* Asegurar que el modal esté siempre visible */
-    margin-top: 5vh;
-    margin-bottom: 5vh;
+    /* Asegurar que el modal esté siempre visible y centrado */
+    margin-top: 20px;
+    margin-bottom: 20px;
+    flex-shrink: 0;
 }
 
 /* Ajustes para móviles */
 @media (max-width: 768px) {
+    .modal {
+        padding: 10px;
+        align-items: flex-start;
+    }
+    
     .modal-content {
         margin: 10px auto;
         width: 95%;
@@ -90,10 +106,6 @@
         border-radius: 8px 8px 0 0;
         margin-top: 10px;
         margin-bottom: 10px;
-    }
-    
-    .modal {
-        padding: 0;
     }
 }
 
@@ -141,12 +153,14 @@
     flex: 1;
     min-height: 0; /* Permite que el flex funcione correctamente */
     /* El scroll interno se manejará automáticamente por el flex */
+    max-height: calc(100vh - 200px); /* Altura máxima considerando header y footer */
 }
 
 /* Ajustes para móviles en modal-body */
 @media (max-width: 768px) {
     .modal-body {
         padding: 15px;
+        max-height: calc(100vh - 150px);
     }
 }
 

@@ -94,8 +94,8 @@
     </div>
 
     <!-- Modal para agregar/editar campo -->
-    <div class="modal" id="campoModal" onclick="if(event.target === this) cerrarModalCampo()">
-        <div class="modal-content modal-large">
+    <div class="modal" id="campoModal" onclick="if(event.target === this && !event.target.closest('.modal-content')) cerrarModalCampo()">
+        <div class="modal-content modal-large" onclick="event.stopPropagation()">
             <div class="modal-header">
                 <h3 id="modalTitle">Agregar Campo</h3>
                 <button type="button" class="modal-close" onclick="cerrarModalCampo()" title="Cerrar">
@@ -197,8 +197,8 @@
     </div>
 
     <!-- Modal de confirmación para eliminar (flotante) -->
-    <div class="modal" id="confirmModal" style="display: none;" onclick="if(event.target === this) cerrarModalConfirmacion()">
-        <div class="modal-content modal-small">
+    <div class="modal" id="confirmModal" style="display: none;" onclick="if(event.target === this && !event.target.closest('.modal-content')) cerrarModalConfirmacion()">
+        <div class="modal-content modal-small" onclick="event.stopPropagation()">
             <div class="modal-header">
                 <h3>Confirmar Eliminación</h3>
                 <button type="button" class="modal-close" onclick="cerrarModalConfirmacion()" title="Cerrar">
@@ -409,7 +409,7 @@ function mostrarModalAgregarCampo() {
     document.getElementById('configuracionEspecifica').style.display = 'none';
     
     const modal = document.getElementById('campoModal');
-    modal.style.display = 'block';
+    modal.style.display = 'flex'; // Usar flex para centrar correctamente
     
     // Prevenir scroll del body cuando el modal está abierto
     const scrollY = window.scrollY;
@@ -455,7 +455,7 @@ function editarCampo(campoId) {
     }
     
     const modal = document.getElementById('campoModal');
-    modal.style.display = 'block';
+    modal.style.display = 'flex'; // Usar flex para centrar correctamente
     
     // Prevenir scroll del body cuando el modal está abierto
     const scrollY = window.scrollY;
@@ -477,7 +477,7 @@ function eliminarCampo(campoId) {
     };
     
     const modal = document.getElementById('confirmModal');
-    modal.style.display = 'block';
+    modal.style.display = 'flex'; // Usar flex para centrar correctamente
     
     // Prevenir scroll del body cuando el modal está abierto
     const scrollY = window.scrollY;
@@ -703,10 +703,10 @@ document.addEventListener('keydown', function(event) {
         const campoModal = document.getElementById('campoModal');
         const confirmModal = document.getElementById('confirmModal');
         
-        if (campoModal && campoModal.style.display === 'block') {
+        if (campoModal && (campoModal.style.display === 'flex' || campoModal.style.display === 'block')) {
             cerrarModalCampo();
         }
-        if (confirmModal && confirmModal.style.display === 'block') {
+        if (confirmModal && (confirmModal.style.display === 'flex' || confirmModal.style.display === 'block')) {
             cerrarModalConfirmacion();
         }
     }

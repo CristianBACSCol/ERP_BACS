@@ -91,8 +91,8 @@
 </div>
 
 <!-- Modal de confirmación para eliminar -->
-<div class="modal" id="confirmModal" onclick="if(event.target === this) closeModal()">
-    <div class="modal-content">
+<div class="modal" id="confirmModal" onclick="if(event.target === this && !event.target.closest('.modal-content')) closeModal()">
+    <div class="modal-content" onclick="event.stopPropagation()">
         <div class="modal-header">
             <h3>Confirmar Eliminación</h3>
             <button type="button" class="modal-close" onclick="closeModal()">&times;</button>
@@ -116,7 +116,7 @@ function eliminarFormulario(id, nombre) {
     };
     
     const modal = document.getElementById('confirmModal');
-    modal.style.display = 'block';
+    modal.style.display = 'flex'; // Usar flex para centrar correctamente
     
     // Prevenir scroll del body cuando el modal está abierto
     const scrollY = window.scrollY;
@@ -170,7 +170,7 @@ function closeModal() {
 document.addEventListener('keydown', function(event) {
     if (event.key === 'Escape') {
         const confirmModal = document.getElementById('confirmModal');
-        if (confirmModal && confirmModal.style.display === 'block') {
+        if (confirmModal && (confirmModal.style.display === 'flex' || confirmModal.style.display === 'block')) {
             closeModal();
         }
     }
