@@ -1,0 +1,40 @@
+# Archivos y directorios a ignorar en Vercel
+
+# Entorno virtual
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Archivos de desarrollo
+.env
+.env.local
+*.log
+*.sql
+*.db
+
+# Archivos de uploads locales (se usan R2 en producción)
+uploads/
+
+# Archivos de IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Archivos del sistema
+.DS_Store
+Thumbs.db
+
+# Archivos de documentación
+*.md
+!README.md
+
+# Scripts de desarrollo
+ejecutar_app.py
+setup_completo.py
+migrar_db.py
+

@@ -1,0 +1,32 @@
+{
+  "version": 2,
+  "buildCommand": "",
+  "outputDirectory": "",
+  "routes": [
+    {
+      "src": "/static/(.*)",
+      "dest": "/static/$1",
+      "headers": {
+        "Cache-Control": "public, max-age=31536000, immutable"
+      }
+    },
+    {
+      "src": "/files/(.*)",
+      "dest": "/files/$1"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/api/index.py"
+    }
+  ],
+  "functions": {
+    "api/index.py": {
+      "maxDuration": 30,
+      "memory": 1024
+    }
+  },
+  "limits": {
+    "maxRequestSize": 10485760
+  }
+}
+
