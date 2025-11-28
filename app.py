@@ -2814,6 +2814,8 @@ def diligenciar_formulario(id):
                                     archivo.seek(0)
                                     file_data = archivo.read()
                                     from io import BytesIO
+                                    # Asegurar que PILImage esté disponible
+                                    from PIL import Image as PILImage
                                     
                                     # Intentar registrar HEIC si no se hizo antes
                                     try:
