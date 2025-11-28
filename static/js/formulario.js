@@ -1,6 +1,33 @@
 // Variables globales para las firmas
 let firmas = {};
 
+// Verificar que heic2any esté disponible
+(function() {
+    function checkHeic2any() {
+        if (typeof heic2any !== 'undefined') {
+            console.log('✅ Biblioteca heic2any cargada correctamente');
+            window.heic2anyAvailable = true;
+            return true;
+        } else {
+            window.heic2anyAvailable = false;
+            return false;
+        }
+    }
+    
+    // Verificar cuando el DOM esté listo
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', function() {
+            checkHeic2any();
+            setTimeout(checkHeic2any, 500);
+            setTimeout(checkHeic2any, 1000);
+        });
+    } else {
+        checkHeic2any();
+        setTimeout(checkHeic2any, 500);
+        setTimeout(checkHeic2any, 1000);
+    }
+})();
+
 // Inicializar canvas de firmas
 document.addEventListener('DOMContentLoaded', function() {
     inicializarFirmas();
@@ -170,8 +197,41 @@ async function convertirHEIC(file) {
     });
 }
 
+// Verificar que heic2any esté disponible al cargar el script
+(function() {
+    function checkHeic2any() {
+        if (typeof heic2any !== 'undefined') {
+            console.log('✅ Biblioteca heic2any cargada correctamente');
+            window.heic2anyAvailable = true;
+        } else {
+            window.heic2anyAvailable = false;
+            console.warn('⚠️ heic2any no disponible aún, se verificará cuando sea necesario');
+        }
+    }
+    
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', checkHeic2any);
+    } else {
+        checkHeic2any();
+    }
+    
+    // Verificar periódicamente
+    setTimeout(checkHeic2any, 500);
+    setTimeout(checkHeic2any, 1000);
+})();
+
 async function optimizarImagen(file) {
     return new Promise((resolve, reject) => {
+        // IMPORTANTE: No intentar cargar HEIC directamente en Image
+        // Si el archivo es HEIC, debe convertirse ANTES de llegar aquí
+        if (file.name.toLowerCase().endsWith('.heic') || 
+            file.name.toLowerCase().endsWith('.heif') ||
+            file.type === 'image/heic' ||
+            file.type === 'image/heif') {
+            reject(new Error('ERROR CRÍTICO: Se intentó optimizar un HEIC sin convertir primero. El archivo debe convertirse a JPEG antes de optimizar.'));
+            return;
+        }
+        
         const reader = new FileReader();
         reader.onload = function(e) {
             const img = new Image();
@@ -352,16 +412,43 @@ function inicializarPreviewsFotos() {
                             try {
                                 let fileToOptimize = file;
                                 
-                                // Si es HEIC, convertir primero a JPEG
-                                if (file.name.toLowerCase().endsWith('.heic') || 
-                                    file.name.toLowerCase().endsWith('.heif') ||
-                                    file.type === 'image/heic' ||
-                                    file.type === 'image/heif') {
+                                // CRÍTICO: Si es HEIC, DEBE convertirse ANTES de optimizar
+                                const isHeic = file.name.toLowerCase().endsWith('.heic') || 
+                                             file.name.toLowerCase().endsWith('.heif') ||
+                                             file.type === 'image/heic' ||
+                                             file.type === 'image/heif';
+                                
+                                if (isHeic) {
                                     console.log(`DEBUG: 🔍 Detectado archivo HEIC: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`);
                                     updateLoadingMsg(`Convirtiendo HEIC a JPEG: ${file.name}...`);
                                     
+                                    // Verificar que heic2any esté disponible
+                                    let heicConverter = null;
+                                    let attempts = 0;
+                                    while (attempts < 50 && !heicConverter) {
+                                        if (typeof heic2any !== 'undefined') {
+                                            heicConverter = heic2any;
+                                            break;
+                                        }
+                                        await new Promise(resolve => setTimeout(resolve, 100));
+                                        attempts++;
+                                    }
+                                    
+                                    if (!heicConverter) {
+                                        const errorMsg = 'La biblioteca de conversión HEIC no está disponible. Por favor, recarga la página e intenta de nuevo.';
+                                        console.error('❌ ERROR:', errorMsg);
+                                        alert(errorMsg);
+                                        throw new Error(errorMsg);
+                                    }
+                                    
                                     try {
                                         fileToOptimize = await convertirHEIC(file);
+                                        
+                                        // Verificar que la conversión fue exitosa
+                                        if (!fileToOptimize || fileToOptimize.type !== 'image/jpeg') {
+                                            throw new Error('La conversión HEIC no produjo un archivo JPEG válido');
+                                        }
+                                        
                                         const convertedSize = (fileToOptimize.size / 1024 / 1024).toFixed(2);
                                         console.log(`DEBUG: ✅ HEIC convertido exitosamente - Tamaño convertido: ${convertedSize} MB`);
                                         updateLoadingMsg(`Optimizando imagen convertida (${convertedSize} MB)...`);
@@ -375,8 +462,14 @@ function inicializarPreviewsFotos() {
                                     updateLoadingMsg(`Optimizando: ${file.name}...`);
                                 }
                                 
+                                // Verificar que NO sea HEIC antes de optimizar
+                                if (fileToOptimize.name.toLowerCase().endsWith('.heic') || 
+                                    fileToOptimize.name.toLowerCase().endsWith('.heif')) {
+                                    throw new Error('ERROR CRÍTICO: El archivo sigue siendo HEIC después de la conversión. No se puede optimizar.');
+                                }
+                                
                                 // Optimizar la imagen (ya sea original o convertida)
-                                console.log(`DEBUG: 🔄 Optimizando imagen: ${fileToOptimize.name} (${(fileToOptimize.size / 1024 / 1024).toFixed(2)} MB)`);
+                                console.log(`DEBUG: 🔄 Optimizando imagen: ${fileToOptimize.name} (${(fileToOptimize.size / 1024 / 1024).toFixed(2)} MB), Tipo: ${fileToOptimize.type}`);
                                 const optimizedFile = await optimizarImagen(fileToOptimize);
                                 const finalSize = (optimizedFile.size / 1024 / 1024).toFixed(2);
                                 console.log(`DEBUG: ✅ Imagen optimizada: ${optimizedFile.name} - Tamaño final: ${finalSize} MB`);

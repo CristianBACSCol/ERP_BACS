@@ -223,38 +223,7 @@
 </div>
 
 <link rel="stylesheet" href="{{ url_for('static', filename='css/formulario.css') }}">
-<!-- Biblioteca para convertir HEIC a JPEG - usar versión más reciente y estable -->
-<script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js" onerror="console.error('Error cargando heic2any')"></script>
-<script>
-// Verificar y configurar heic2any
-(function() {
-    let attempts = 0;
-    const maxAttempts = 10;
-    
-    function checkHeic2any() {
-        attempts++;
-        if (typeof heic2any !== 'undefined' && typeof heic2any === 'function') {
-            console.log('✅ Biblioteca heic2any cargada correctamente');
-            window.heic2anyLoaded = true;
-            window.heic2any = heic2any;
-            return true;
-        } else if (attempts < maxAttempts) {
-            setTimeout(checkHeic2any, 200);
-            return false;
-        } else {
-            console.error('❌ ERROR: La biblioteca heic2any no se cargó después de múltiples intentos');
-            window.heic2anyLoaded = false;
-            return false;
-        }
-    }
-    
-    // Iniciar verificación
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', checkHeic2any);
-    } else {
-        checkHeic2any();
-    }
-})();
-</script>
+<!-- Biblioteca para convertir HEIC a JPEG -->
+<script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
 <script src="{{ url_for('static', filename='js/formulario.js') }}" defer></script>
 {% endblock %}
