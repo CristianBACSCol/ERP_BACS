@@ -15,7 +15,7 @@ from PIL import Image as PILImage
 import io
 
 from config import Config
-from r2_storage import upload_file_to_r2, download_file_from_r2, download_to_temp_file, file_exists_in_r2, get_file_url_from_r2, delete_file_from_r2, get_presigned_upload_url
+from r2_storage import upload_file_to_r2, download_file_from_r2, download_to_temp_file, file_exists_in_r2, get_file_url_from_r2, delete_file_from_r2
 
 # Registrar soporte para HEIC/HEIF al inicio de la aplicación
 try:
@@ -2610,20 +2610,12 @@ def diligenciar_formulario(id):
                         respuesta_campo.empresa_firmante = request.form.get(f'empresa_{campo.id}', '')
                         respuesta_campo.cargo_firmante = request.form.get(f'cargo_{campo.id}', '')
                 elif campo.tipo_campo == 'foto':
-                    # Verificar si las imágenes ya fueron subidas directamente a R2
-                    uploaded_files = request.form.get(f'campo_{campo.id}_uploaded')
-                    nombres_archivos = []
+                    # Procesar fotos múltiples con renombrado automático
+                    archivos = request.files.getlist(f'campo_{campo.id}')
+                    print(f"DEBUG: Campo {campo.id} - Recibidos {len(archivos)} archivos")
                     
-                    if uploaded_files:
-                        # Las imágenes ya fueron subidas directamente a R2
-                        nombres_archivos = [f.strip() for f in uploaded_files.split(',') if f.strip()]
-                        print(f"DEBUG: Campo {campo.id} - Usando archivos ya subidos a R2: {nombres_archivos}")
-                    else:
-                        # Procesar fotos múltiples con renombrado automático (modo legacy)
-                        archivos = request.files.getlist(f'campo_{campo.id}')
-                        print(f"DEBUG: Campo {campo.id} - Recibidos {len(archivos)} archivos (modo legacy)")
-                        
-                        for i, archivo in enumerate(archivos):
+                    nombres_archivos = []
+                    for i, archivo in enumerate(archivos):
                             print(f"DEBUG: Archivo {i+1}: {archivo.filename if archivo.filename else 'Sin nombre'}")
                             if archivo and archivo.filename:
                                 # Validar tamaño del archivo antes de procesar (límite:  20MB)
@@ -2638,7 +2630,7 @@ def diligenciar_formulario(id):
                                     flash(error_msg, 'error')
                                     continue
                                 
-                                print(f"DEBUG: Tamaño del archivo: {file_size / 1024 / 1024:.2f} MB")
+                                print(f"DEBUG: Tamaño del archivo: {file_size / 1024 / 1024:.2f} MB - Se optimizará automáticamente")
                                 
                                 try:
                                     # Leer el archivo en memoria
@@ -2708,32 +2700,33 @@ def diligenciar_formulario(id):
                                     original_format = img.format
                                     original_file_size = len(file_data)
                                     
-                                    # Redimensionar si la imagen es muy grande (para evitar payloads muy grandes)
-                                    # Límite reducido: 3000px en la dimensión más grande (más agresivo)
-                                    MAX_DIMENSION = 3000
+                                    # La redimensionación inicial se hace en el bloque de optimización más abajo
                                     needs_resize = False
-                                    if img.width > MAX_DIMENSION or img.height > MAX_DIMENSION:
-                                        needs_resize = True
-                                        if img.width > img.height:
-                                            new_width = MAX_DIMENSION
-                                            new_height = int(img.height * (MAX_DIMENSION / img.width))
-                                        else:
-                                            new_height = MAX_DIMENSION
-                                            new_width = int(img.width * (MAX_DIMENSION / img.height))
-                                        img = img.resize((new_width, new_height), PILImage.Resampling.LANCZOS)
-                                        print(f"DEBUG: Imagen redimensionada de {original_size} a {img.size} (límite: {MAX_DIMENSION}px)")
                                     
                                     # Optimizar peso usando compresión JPG progresiva con calidad adaptativa
-                                    # Comenzar con calidad 85, reducir si es necesario para cumplir límite de Vercel (4.5MB)
-                                    # Reducido a 2MB para dejar más margen para otros datos del request
-                                    MAX_FILE_SIZE = 2 * 1024 * 1024  # 2MB (margen seguro para evitar 413 en Vercel)
+                                    # Para archivos de 10MB, necesitamos comprimir agresivamente
+                                    # Límite: 1.5MB por imagen (dejando margen para múltiples imágenes y otros datos)
+                                    MAX_FILE_SIZE = 1.5 * 1024 * 1024  # 1.5MB por imagen
                                     img_buffer = BytesIO()
                                     
-                                    # Intentar diferentes niveles de calidad hasta que el archivo sea menor a 2MB
-                                    # Empezar con calidad más baja para archivos más pequeños
-                                    quality_levels = [85, 80, 75, 70, 65, 60, 55, 50]
+                                    # Redimensionar primero si es muy grande (más agresivo para archivos grandes)
+                                    # Si la imagen original es > 2500px, redimensionar a 2500px
+                                    MAX_DIMENSION_INITIAL = 2500
+                                    if img.width > MAX_DIMENSION_INITIAL or img.height > MAX_DIMENSION_INITIAL:
+                                        needs_resize = True
+                                        if img.width > img.height:
+                                            new_width = MAX_DIMENSION_INITIAL
+                                            new_height = int(img.height * (MAX_DIMENSION_INITIAL / img.width))
+                                        else:
+                                            new_height = MAX_DIMENSION_INITIAL
+                                            new_width = int(img.width * (MAX_DIMENSION_INITIAL / img.height))
+                                        img = img.resize((new_width, new_height), PILImage.Resampling.LANCZOS)
+                                        print(f"DEBUG: Imagen redimensionada inicialmente a {img.size} para optimización")
+                                    
+                                    # Intentar diferentes niveles de calidad empezando más bajo
+                                    quality_levels = [70, 65, 60, 55, 50, 45, 40, 35]
                                     optimized_size = 0
-                                    final_quality = 90
+                                    final_quality = 70
                                     
                                     for quality in quality_levels:
                                         img_buffer.seek(0)
@@ -2759,9 +2752,10 @@ def diligenciar_formulario(id):
                                     # Si aún es muy grande, redimensionar más agresivamente
                                     if optimized_size > MAX_FILE_SIZE:
                                         print(f"DEBUG: Archivo aún muy grande ({optimized_size} bytes), redimensionando más agresivamente...")
-                                        # Redimensionar a máximo 2000px (más agresivo)
-                                        MAX_DIMENSION_AGGRESSIVE = 2000
+                                        # Redimensionar a máximo 1500px
+                                        MAX_DIMENSION_AGGRESSIVE = 1500
                                         if img.width > MAX_DIMENSION_AGGRESSIVE or img.height > MAX_DIMENSION_AGGRESSIVE:
+                                            needs_resize = True
                                             if img.width > img.height:
                                                 new_width = MAX_DIMENSION_AGGRESSIVE
                                                 new_height = int(img.height * (MAX_DIMENSION_AGGRESSIVE / img.width))
@@ -2769,13 +2763,13 @@ def diligenciar_formulario(id):
                                                 new_height = MAX_DIMENSION_AGGRESSIVE
                                                 new_width = int(img.width * (MAX_DIMENSION_AGGRESSIVE / img.height))
                                             img = img.resize((new_width, new_height), PILImage.Resampling.LANCZOS)
+                                            print(f"DEBUG: Imagen redimensionada agresivamente a {img.size}")
                                         
-                                        # Intentar de nuevo con calidad más baja
+                                        # Intentar de nuevo con calidades más bajas
                                         img_buffer.seek(0)
                                         img_buffer.truncate(0)
                                         
-                                        # Intentar con calidades más bajas hasta que quepa
-                                        for quality in [60, 55, 50, 45]:
+                                        for quality in [50, 45, 40, 35, 30]:
                                             img_buffer.seek(0)
                                             img_buffer.truncate(0)
                                             img.save(img_buffer, format='JPEG', quality=quality, optimize=True, progressive=True)
@@ -2785,8 +2779,8 @@ def diligenciar_formulario(id):
                                                 print(f"DEBUG: Después de redimensionamiento agresivo: {optimized_size} bytes (calidad {quality}%)")
                                                 break
                                         else:
-                                            # Si aún es muy grande, usar calidad 45 como último recurso
-                                            final_quality = 45
+                                            # Si aún es muy grande, usar calidad 30 como último recurso
+                                            final_quality = 30
                                             print(f"DEBUG: Después de redimensionamiento agresivo: {optimized_size} bytes (calidad {final_quality}% - último recurso)")
                                     
                                     reduction = ((original_file_size - optimized_size) / original_file_size * 100) if original_file_size > 0 else 0
@@ -3002,55 +2996,6 @@ def descargar_formulario_pdf_file(id):
         as_attachment=True,
         download_name=respuesta_formulario.archivo_pdf
     )
-
-
-@app.route('/api/presigned-upload-url', methods=['POST'])
-@login_required
-def get_presigned_upload_url_endpoint():
-    """Genera una URL presignada para subir un archivo directamente a R2"""
-    try:
-        data = request.get_json()
-        if not data:
-            return jsonify({'error': 'No se proporcionaron datos'}), 400
-        
-        filename = data.get('filename')
-        content_type = data.get('content_type', 'application/octet-stream')
-        campo_id = data.get('campo_id')
-        respuesta_formulario_id = data.get('respuesta_formulario_id')
-        
-        if not filename:
-            return jsonify({'error': 'Se requiere el nombre del archivo'}), 400
-        
-        # Generar nombre único para el archivo
-        from datetime import datetime
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-        file_extension = os.path.splitext(filename)[1] or '.jpg'
-        
-        # Construir ruta en R2
-        if campo_id and respuesta_formulario_id:
-            unique_filename = f'foto_{campo_id}_{respuesta_formulario_id}_{timestamp}{file_extension}'
-        else:
-            unique_filename = f'upload_{timestamp}{file_extension}'
-        
-        r2_path = f'Formularios/imagenes/{unique_filename}'
-        
-        # Generar URL presignada
-        presigned_data = get_presigned_upload_url(r2_path, content_type=content_type, expires_in=3600)
-        
-        if not presigned_data:
-            return jsonify({'error': 'No se pudo generar la URL presignada. Verifica la configuración de R2.'}), 500
-        
-        return jsonify({
-            'url': presigned_data['url'],
-            'r2_path': r2_path,
-            'filename': unique_filename
-        }), 200
-        
-    except Exception as e:
-        print(f"ERROR generando presigned URL: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/api/formularios/<int:id>/campos', methods=['POST'])
