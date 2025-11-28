@@ -104,37 +104,62 @@ function guardarFirma(campoId) {
 // Función para convertir HEIC a JPEG
 async function convertirHEIC(file) {
     return new Promise((resolve, reject) => {
-        // Verificar si heic2any está disponible
-        if (typeof heic2any === 'undefined') {
-            reject(new Error('Biblioteca heic2any no disponible. Por favor, recarga la página.'));
-            return;
+        // Esperar a que heic2any esté disponible (con timeout)
+        function waitForHeic2any(maxWait = 5000) {
+            const startTime = Date.now();
+            
+            function check() {
+                if (typeof heic2any !== 'undefined' && heic2any) {
+                    convert();
+                } else if (Date.now() - startTime < maxWait) {
+                    setTimeout(check, 100);
+                } else {
+                    reject(new Error('Biblioteca heic2any no disponible después de esperar. Por favor, recarga la página.'));
+                }
+            }
+            
+            function convert() {
+                const originalSize = (file.size / 1024 / 1024).toFixed(2);
+                console.log(`DEBUG: Convirtiendo HEIC: ${file.name} (${originalSize} MB)`);
+                
+                try {
+                    heic2any({
+                        blob: file,
+                        toType: 'image/jpeg',
+                        quality: 0.92
+                    }).then(function(conversionResult) {
+                        // heic2any puede devolver un array o un blob directamente
+                        const blob = Array.isArray(conversionResult) ? conversionResult[0] : conversionResult;
+                        
+                        if (!blob) {
+                            reject(new Error('Error: La conversión HEIC no devolvió un blob válido'));
+                            return;
+                        }
+                        
+                        // Crear un nuevo File desde el blob convertido
+                        const convertedFile = new File([blob], file.name.replace(/\.(heic|heif)$/i, '.jpg'), {
+                            type: 'image/jpeg',
+                            lastModified: Date.now()
+                        });
+                        
+                        const convertedSize = (convertedFile.size / 1024 / 1024).toFixed(2);
+                        console.log(`DEBUG: ✅ HEIC convertido - Original: ${originalSize} MB, Convertido: ${convertedSize} MB`);
+                        
+                        resolve(convertedFile);
+                    }).catch(function(error) {
+                        console.error('Error convirtiendo HEIC:', error);
+                        reject(new Error('Error al convertir HEIC: ' + (error.message || 'Error desconocido')));
+                    });
+                } catch (error) {
+                    console.error('Error al llamar heic2any:', error);
+                    reject(new Error('Error al llamar la función de conversión HEIC: ' + (error.message || 'Error desconocido')));
+                }
+            }
+            
+            check();
         }
         
-        const originalSize = (file.size / 1024 / 1024).toFixed(2);
-        console.log(`DEBUG: Convirtiendo HEIC: ${file.name} (${originalSize} MB)`);
-        
-        heic2any({
-            blob: file,
-            toType: 'image/jpeg',
-            quality: 0.92
-        }).then(function(conversionResult) {
-            // heic2any puede devolver un array o un blob directamente
-            const blob = Array.isArray(conversionResult) ? conversionResult[0] : conversionResult;
-            
-            // Crear un nuevo File desde el blob convertido
-            const convertedFile = new File([blob], file.name.replace(/\.(heic|heif)$/i, '.jpg'), {
-                type: 'image/jpeg',
-                lastModified: Date.now()
-            });
-            
-            const convertedSize = (convertedFile.size / 1024 / 1024).toFixed(2);
-            console.log(`DEBUG: HEIC convertido - Original: ${originalSize} MB, Convertido: ${convertedSize} MB`);
-            
-            resolve(convertedFile);
-        }).catch(function(error) {
-            console.error('Error convirtiendo HEIC:', error);
-            reject(new Error('Error al convertir HEIC: ' + (error.message || 'Error desconocido')));
-        });
+        waitForHeic2any();
     });
 }
 
@@ -144,22 +169,26 @@ async function optimizarImagen(file) {
         reader.onload = function(e) {
             const img = new Image();
             img.onload = function() {
-                const MAX_DIMENSION = 2000;
-                const MAX_FILE_SIZE = 0.5 * 1024 * 1024;
-                const QUALITY_START = 0.75;
-                const QUALITY_MIN = 0.3;
+                const MAX_FILE_SIZE = 0.5 * 1024 * 1024; // 0.5MB máximo
+                const MAX_DIMENSION_INITIAL = 2000;
+                const MAX_DIMENSION_AGGRESSIVE = 1200;
                 
                 let width = img.width;
                 let height = img.height;
+                const originalSize = file.size;
                 
-                if (width > MAX_DIMENSION || height > MAX_DIMENSION) {
+                console.log(`DEBUG: Iniciando optimización - Original: ${(originalSize / 1024 / 1024).toFixed(2)} MB, Dimensiones: ${width}x${height}`);
+                
+                // Redimensionar primero si es necesario
+                if (width > MAX_DIMENSION_INITIAL || height > MAX_DIMENSION_INITIAL) {
                     if (width > height) {
-                        width = MAX_DIMENSION;
-                        height = Math.round(img.height * (MAX_DIMENSION / img.width));
+                        width = MAX_DIMENSION_INITIAL;
+                        height = Math.round(img.height * (MAX_DIMENSION_INITIAL / img.width));
                     } else {
-                        height = MAX_DIMENSION;
-                        width = Math.round(img.width * (MAX_DIMENSION / img.height));
+                        height = MAX_DIMENSION_INITIAL;
+                        width = Math.round(img.width * (MAX_DIMENSION_INITIAL / img.height));
                     }
+                    console.log(`DEBUG: Redimensionado inicial a ${width}x${height}`);
                 }
                 
                 const canvas = document.createElement('canvas');
@@ -168,39 +197,98 @@ async function optimizarImagen(file) {
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(img, 0, 0, width, height);
                 
-                let quality = QUALITY_START;
-                let attempts = 0;
-                const maxAttempts = 10;
-                
-                function tryCompress() {
-                    canvas.toBlob(function(compressedBlob) {
-                        if (!compressedBlob) {
-                            reject(new Error('Error al comprimir imagen'));
-                            return;
+                // Función para intentar comprimir con una calidad específica
+                function tryCompressWithQuality(quality, dimension = null) {
+                    return new Promise((resolveCompress, rejectCompress) => {
+                        // Si se especifica una dimensión, redimensionar primero
+                        if (dimension) {
+                            let newWidth = width;
+                            let newHeight = height;
+                            if (width > dimension || height > dimension) {
+                                if (width > height) {
+                                    newWidth = dimension;
+                                    newHeight = Math.round(height * (dimension / width));
+                                } else {
+                                    newHeight = dimension;
+                                    newWidth = Math.round(width * (dimension / height));
+                                }
+                                canvas.width = newWidth;
+                                canvas.height = newHeight;
+                                const ctx2 = canvas.getContext('2d');
+                                ctx2.drawImage(img, 0, 0, newWidth, newHeight);
+                                console.log(`DEBUG: Redimensionado agresivo a ${newWidth}x${newHeight}`);
+                            }
                         }
                         
-                        const size = compressedBlob.size;
-                        console.log(`DEBUG: Intento ${attempts + 1} - Tamaño: ${(size / 1024).toFixed(2)} KB, Calidad: ${(quality * 100).toFixed(0)}%`);
+                        canvas.toBlob(function(compressedBlob) {
+                            if (!compressedBlob) {
+                                rejectCompress(new Error('Error al comprimir imagen'));
+                                return;
+                            }
+                            
+                            const size = compressedBlob.size;
+                            resolveCompress({ blob: compressedBlob, size: size, quality: quality });
+                        }, 'image/jpeg', quality);
+                    });
+                }
+                
+                // Intentar diferentes niveles de calidad y dimensiones
+                async function optimize() {
+                    const qualityLevels = [0.75, 0.70, 0.65, 0.60, 0.55, 0.50, 0.45, 0.40, 0.35, 0.30, 0.25, 0.20];
+                    
+                    // Primera pasada: probar con dimensiones iniciales
+                    for (const quality of qualityLevels) {
+                        const result = await tryCompressWithQuality(quality);
+                        console.log(`DEBUG: Calidad ${(quality * 100).toFixed(0)}% - Tamaño: ${(result.size / 1024).toFixed(2)} KB`);
                         
-                        if (size <= MAX_FILE_SIZE || quality <= QUALITY_MIN || attempts >= maxAttempts) {
-                            const optimizedFile = new File([compressedBlob], file.name.replace(/\.[^/.]+$/, '.jpg'), {
+                        if (result.size <= MAX_FILE_SIZE) {
+                            const optimizedFile = new File([result.blob], file.name.replace(/\.[^/.]+$/, '.jpg'), {
                                 type: 'image/jpeg',
                                 lastModified: Date.now()
                             });
                             
-                            const reduction = ((file.size - size) / file.size * 100).toFixed(1);
-                            console.log(`DEBUG: Imagen optimizada - Original: ${(file.size / 1024).toFixed(2)} KB, Optimizado: ${(size / 1024).toFixed(2)} KB, Reducción: ${reduction}%`);
+                            const reduction = ((originalSize - result.size) / originalSize * 100).toFixed(1);
+                            console.log(`DEBUG: ✅ Imagen optimizada - Original: ${(originalSize / 1024 / 1024).toFixed(2)} MB, Optimizado: ${(result.size / 1024).toFixed(2)} KB (${(result.size / 1024 / 1024).toFixed(2)} MB), Reducción: ${reduction}%, Calidad: ${(quality * 100).toFixed(0)}%`);
                             
                             resolve(optimizedFile);
-                        } else {
-                            quality -= 0.05;
-                            attempts++;
-                            tryCompress();
+                            return;
                         }
-                    }, 'image/jpeg', quality);
+                    }
+                    
+                    // Segunda pasada: redimensionar más agresivamente y probar de nuevo
+                    console.log(`DEBUG: Archivo aún muy grande, redimensionando más agresivamente a ${MAX_DIMENSION_AGGRESSIVE}px...`);
+                    for (const quality of [0.50, 0.45, 0.40, 0.35, 0.30, 0.25, 0.20, 0.15]) {
+                        const result = await tryCompressWithQuality(quality, MAX_DIMENSION_AGGRESSIVE);
+                        console.log(`DEBUG: Calidad ${(quality * 100).toFixed(0)}% (agresivo) - Tamaño: ${(result.size / 1024).toFixed(2)} KB`);
+                        
+                        if (result.size <= MAX_FILE_SIZE) {
+                            const optimizedFile = new File([result.blob], file.name.replace(/\.[^/.]+$/, '.jpg'), {
+                                type: 'image/jpeg',
+                                lastModified: Date.now()
+                            });
+                            
+                            const reduction = ((originalSize - result.size) / originalSize * 100).toFixed(1);
+                            console.log(`DEBUG: ✅ Imagen optimizada (agresivo) - Original: ${(originalSize / 1024 / 1024).toFixed(2)} MB, Optimizado: ${(result.size / 1024).toFixed(2)} KB (${(result.size / 1024 / 1024).toFixed(2)} MB), Reducción: ${reduction}%, Calidad: ${(quality * 100).toFixed(0)}%`);
+                            
+                            resolve(optimizedFile);
+                            return;
+                        }
+                    }
+                    
+                    // Último recurso: usar la mejor calidad que encontramos (aunque sea > 0.5MB)
+                    const lastResult = await tryCompressWithQuality(0.15, MAX_DIMENSION_AGGRESSIVE);
+                    const optimizedFile = new File([lastResult.blob], file.name.replace(/\.[^/.]+$/, '.jpg'), {
+                        type: 'image/jpeg',
+                        lastModified: Date.now()
+                    });
+                    
+                    const reduction = ((originalSize - lastResult.size) / originalSize * 100).toFixed(1);
+                    console.log(`DEBUG: ⚠️ Imagen optimizada (último recurso) - Original: ${(originalSize / 1024 / 1024).toFixed(2)} MB, Optimizado: ${(lastResult.size / 1024).toFixed(2)} KB (${(lastResult.size / 1024 / 1024).toFixed(2)} MB), Reducción: ${reduction}%`);
+                    
+                    resolve(optimizedFile);
                 }
                 
-                tryCompress();
+                optimize().catch(reject);
             };
             img.onerror = function() {
                 reject(new Error('Error al cargar imagen'));
@@ -260,15 +348,27 @@ function inicializarPreviewsFotos() {
                                 // Si es HEIC, convertir primero a JPEG
                                 if (file.name.toLowerCase().endsWith('.heic') || 
                                     file.name.toLowerCase().endsWith('.heif')) {
-                                    console.log(`DEBUG: Detectado archivo HEIC: ${file.name}`);
-                                    updateLoadingMsg(`Convirtiendo HEIC: ${file.name}...`);
+                                    console.log(`DEBUG: 🔍 Detectado archivo HEIC: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`);
+                                    updateLoadingMsg(`Convirtiendo HEIC a JPEG: ${file.name}...`);
+                                    
+                                    // Verificar que heic2any esté disponible
+                                    if (typeof heic2any === 'undefined') {
+                                        const errorMsg = 'La biblioteca de conversión HEIC no está cargada. Por favor, recarga la página e intenta de nuevo.';
+                                        console.error('ERROR:', errorMsg);
+                                        alert(errorMsg);
+                                        throw new Error(errorMsg);
+                                    }
+                                    
                                     try {
                                         fileToOptimize = await convertirHEIC(file);
-                                        console.log(`DEBUG: HEIC convertido exitosamente a JPEG`);
-                                        updateLoadingMsg(`Optimizando imagen convertida...`);
+                                        const convertedSize = (fileToOptimize.size / 1024 / 1024).toFixed(2);
+                                        console.log(`DEBUG: ✅ HEIC convertido exitosamente - Tamaño convertido: ${convertedSize} MB`);
+                                        updateLoadingMsg(`Optimizando imagen convertida (${convertedSize} MB)...`);
                                     } catch (heicError) {
-                                        console.error('Error convirtiendo HEIC:', heicError);
-                                        throw new Error('No se pudo convertir el archivo HEIC. Por favor, convierte la imagen a JPEG antes de subirla.');
+                                        console.error('❌ Error convirtiendo HEIC:', heicError);
+                                        const errorMsg = `No se pudo convertir el archivo HEIC: ${heicError.message}. Por favor, convierte la imagen a JPEG antes de subirla.`;
+                                        alert(errorMsg);
+                                        throw new Error(errorMsg);
                                     }
                                 } else {
                                     updateLoadingMsg(`Optimizando: ${file.name}...`);

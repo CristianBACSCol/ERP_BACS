@@ -223,22 +223,33 @@
 </div>
 
 <link rel="stylesheet" href="{{ url_for('static', filename='css/formulario.css') }}">
-<!-- Biblioteca para convertir HEIC a JPEG - cargar de forma asíncrona para no bloquear -->
+<!-- Biblioteca para convertir HEIC a JPEG - cargar antes del script principal -->
+<script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
 <script>
-// Cargar heic2any de forma asíncrona para no aumentar el tamaño inicial de la respuesta
+// Verificar que heic2any se cargó correctamente
 (function() {
-    const script = document.createElement('script');
-    script.src = 'https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js';
-    script.async = true;
-    script.onload = function() {
+    function checkHeic2any() {
         if (typeof heic2any !== 'undefined') {
-            console.log('Biblioteca heic2any cargada correctamente');
+            console.log('✅ Biblioteca heic2any cargada correctamente');
+            window.heic2anyLoaded = true;
+        } else {
+            console.warn('⚠️ ADVERTENCIA: La biblioteca heic2any no se cargó correctamente. Las imágenes HEIC no podrán ser convertidas.');
+            window.heic2anyLoaded = false;
         }
-    };
-    script.onerror = function() {
-        console.warn('ADVERTENCIA: No se pudo cargar heic2any. Las imágenes HEIC no podrán ser convertidas.');
-    };
-    document.head.appendChild(script);
+    }
+    
+    // Verificar inmediatamente
+    checkHeic2any();
+    
+    // Verificar después de que la página cargue
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', checkHeic2any);
+    } else {
+        checkHeic2any();
+    }
+    
+    // Verificar después de un pequeño delay por si acaso
+    setTimeout(checkHeic2any, 500);
 })();
 </script>
 <script src="{{ url_for('static', filename='js/formulario.js') }}" defer></script>
