@@ -2704,14 +2704,13 @@ def diligenciar_formulario(id):
                                     needs_resize = False
                                     
                                     # Optimizar peso usando compresión JPG progresiva con calidad adaptativa
-                                    # Para archivos de 10MB, necesitamos comprimir agresivamente
-                                    # Límite: 1.5MB por imagen (dejando margen para múltiples imágenes y otros datos)
-                                    MAX_FILE_SIZE = 1.5 * 1024 * 1024  # 1.5MB por imagen
+                                    # Límite: 0.5MB por imagen (muy agresivo para evitar 413 en Vercel)
+                                    MAX_FILE_SIZE = 0.5 * 1024 * 1024  # 0.5MB por imagen
                                     img_buffer = BytesIO()
                                     
-                                    # Redimensionar primero si es muy grande (más agresivo para archivos grandes)
-                                    # Si la imagen original es > 2500px, redimensionar a 2500px
-                                    MAX_DIMENSION_INITIAL = 2500
+                                    # Redimensionar primero de forma más agresiva
+                                    # Si la imagen original es > 2000px, redimensionar a 2000px (más agresivo)
+                                    MAX_DIMENSION_INITIAL = 2000
                                     if img.width > MAX_DIMENSION_INITIAL or img.height > MAX_DIMENSION_INITIAL:
                                         needs_resize = True
                                         if img.width > img.height:
@@ -2721,12 +2720,12 @@ def diligenciar_formulario(id):
                                             new_height = MAX_DIMENSION_INITIAL
                                             new_width = int(img.width * (MAX_DIMENSION_INITIAL / img.height))
                                         img = img.resize((new_width, new_height), PILImage.Resampling.LANCZOS)
-                                        print(f"DEBUG: Imagen redimensionada inicialmente a {img.size} para optimización")
+                                        print(f"DEBUG: Imagen redimensionada inicialmente a {img.size} para optimización (límite: {MAX_DIMENSION_INITIAL}px)")
                                     
-                                    # Intentar diferentes niveles de calidad empezando más bajo
-                                    quality_levels = [70, 65, 60, 55, 50, 45, 40, 35]
+                                    # Intentar diferentes niveles de calidad empezando más bajo para archivos pequeños
+                                    quality_levels = [60, 55, 50, 45, 40, 35, 30, 25]
                                     optimized_size = 0
-                                    final_quality = 70
+                                    final_quality = 60
                                     
                                     for quality in quality_levels:
                                         img_buffer.seek(0)
@@ -2744,16 +2743,16 @@ def diligenciar_formulario(id):
                                         
                                         if optimized_size <= MAX_FILE_SIZE:
                                             final_quality = quality
-                                            print(f"DEBUG: Calidad {quality}% produce archivo de {optimized_size} bytes (dentro del límite)")
+                                            print(f"DEBUG: Calidad {quality}% produce archivo de {optimized_size / 1024:.1f} KB (dentro del límite de 0.5MB)")
                                             break
                                         else:
-                                            print(f"DEBUG: Calidad {quality}% produce archivo de {optimized_size} bytes (demasiado grande, probando siguiente nivel)")
+                                            print(f"DEBUG: Calidad {quality}% produce archivo de {optimized_size / 1024:.1f} KB (demasiado grande, probando siguiente nivel)")
                                     
                                     # Si aún es muy grande, redimensionar más agresivamente
                                     if optimized_size > MAX_FILE_SIZE:
-                                        print(f"DEBUG: Archivo aún muy grande ({optimized_size} bytes), redimensionando más agresivamente...")
-                                        # Redimensionar a máximo 1500px
-                                        MAX_DIMENSION_AGGRESSIVE = 1500
+                                        print(f"DEBUG: Archivo aún muy grande ({optimized_size / 1024:.1f} KB), redimensionando más agresivamente...")
+                                        # Redimensionar a máximo 1200px (muy agresivo)
+                                        MAX_DIMENSION_AGGRESSIVE = 1200
                                         if img.width > MAX_DIMENSION_AGGRESSIVE or img.height > MAX_DIMENSION_AGGRESSIVE:
                                             needs_resize = True
                                             if img.width > img.height:
@@ -2763,25 +2762,25 @@ def diligenciar_formulario(id):
                                                 new_height = MAX_DIMENSION_AGGRESSIVE
                                                 new_width = int(img.width * (MAX_DIMENSION_AGGRESSIVE / img.height))
                                             img = img.resize((new_width, new_height), PILImage.Resampling.LANCZOS)
-                                            print(f"DEBUG: Imagen redimensionada agresivamente a {img.size}")
+                                            print(f"DEBUG: Imagen redimensionada agresivamente a {img.size} (límite: {MAX_DIMENSION_AGGRESSIVE}px)")
                                         
                                         # Intentar de nuevo con calidades más bajas
                                         img_buffer.seek(0)
                                         img_buffer.truncate(0)
                                         
-                                        for quality in [50, 45, 40, 35, 30]:
+                                        for quality in [40, 35, 30, 25, 20]:
                                             img_buffer.seek(0)
                                             img_buffer.truncate(0)
                                             img.save(img_buffer, format='JPEG', quality=quality, optimize=True, progressive=True)
                                             optimized_size = len(img_buffer.getvalue())
                                             if optimized_size <= MAX_FILE_SIZE:
                                                 final_quality = quality
-                                                print(f"DEBUG: Después de redimensionamiento agresivo: {optimized_size} bytes (calidad {quality}%)")
+                                                print(f"DEBUG: Después de redimensionamiento agresivo: {optimized_size / 1024:.1f} KB (calidad {quality}%)")
                                                 break
                                         else:
-                                            # Si aún es muy grande, usar calidad 30 como último recurso
-                                            final_quality = 30
-                                            print(f"DEBUG: Después de redimensionamiento agresivo: {optimized_size} bytes (calidad {final_quality}% - último recurso)")
+                                            # Si aún es muy grande, usar calidad 20 como último recurso
+                                            final_quality = 20
+                                            print(f"DEBUG: Después de redimensionamiento agresivo: {optimized_size / 1024:.1f} KB (calidad {final_quality}% - último recurso)")
                                     
                                     reduction = ((original_file_size - optimized_size) / original_file_size * 100) if original_file_size > 0 else 0
                                     

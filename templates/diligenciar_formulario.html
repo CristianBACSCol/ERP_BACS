@@ -535,9 +535,98 @@ function guardarFirma(campoId) {
     console.log(`DEBUG: Firma guardada exitosamente para campo ${campoId}`);
 }
 
+// Función para optimizar imágenes del lado del cliente antes de subirlas
+// Redimensiona a máximo 2000px y comprime a JPEG con calidad ajustable hasta llegar a 0.5MB
+async function optimizarImagen(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const img = new Image();
+            img.onload = function() {
+                // Configuración de optimización
+                const MAX_DIMENSION = 2000; // Máximo 2000px en cualquier dimensión
+                const MAX_FILE_SIZE = 0.5 * 1024 * 1024; // 0.5MB máximo
+                const QUALITY_START = 0.75; // Empezar con 75% de calidad
+                const QUALITY_MIN = 0.3; // Mínimo 30% de calidad
+                
+                // Calcular nuevas dimensiones manteniendo aspecto
+                let width = img.width;
+                let height = img.height;
+                let needsResize = false;
+                
+                if (width > MAX_DIMENSION || height > MAX_DIMENSION) {
+                    needsResize = true;
+                    if (width > height) {
+                        width = MAX_DIMENSION;
+                        height = Math.round(img.height * (MAX_DIMENSION / img.width));
+                    } else {
+                        height = MAX_DIMENSION;
+                        width = Math.round(img.width * (MAX_DIMENSION / img.height));
+                    }
+                }
+                
+                // Crear canvas para redimensionar y comprimir
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                
+                // Dibujar imagen redimensionada
+                ctx.drawImage(img, 0, 0, width, height);
+                
+                // Intentar diferentes niveles de calidad hasta llegar a 0.5MB
+                let quality = QUALITY_START;
+                let blob = null;
+                let attempts = 0;
+                const maxAttempts = 10;
+                
+                function tryCompress() {
+                    canvas.toBlob(function(compressedBlob) {
+                        if (!compressedBlob) {
+                            reject(new Error('Error al comprimir imagen'));
+                            return;
+                        }
+                        
+                        const size = compressedBlob.size;
+                        console.log(`DEBUG: Intento ${attempts + 1} - Tamaño: ${(size / 1024).toFixed(2)} KB, Calidad: ${(quality * 100).toFixed(0)}%`);
+                        
+                        if (size <= MAX_FILE_SIZE || quality <= QUALITY_MIN || attempts >= maxAttempts) {
+                            // Crear nuevo File con el blob optimizado
+                            const optimizedFile = new File([compressedBlob], file.name.replace(/\.[^/.]+$/, '.jpg'), {
+                                type: 'image/jpeg',
+                                lastModified: Date.now()
+                            });
+                            
+                            const reduction = ((file.size - size) / file.size * 100).toFixed(1);
+                            console.log(`DEBUG: Imagen optimizada - Original: ${(file.size / 1024).toFixed(2)} KB, Optimizado: ${(size / 1024).toFixed(2)} KB, Reducción: ${reduction}%`);
+                            
+                            resolve(optimizedFile);
+                        } else {
+                            // Reducir calidad y volver a intentar
+                            quality -= 0.05;
+                            attempts++;
+                            tryCompress();
+                        }
+                    }, 'image/jpeg', quality);
+                }
+                
+                tryCompress();
+            };
+            img.onerror = function() {
+                reject(new Error('Error al cargar imagen'));
+            };
+            img.src = e.target.result;
+        };
+        reader.onerror = function() {
+            reject(new Error('Error al leer archivo'));
+        };
+        reader.readAsDataURL(file);
+    });
+}
+
 function inicializarPreviewsFotos() {
     document.querySelectorAll('input[type="file"]').forEach(input => {
-        input.addEventListener('change', function(e) {
+        input.addEventListener('change', async function(e) {
             const campoId = this.id.split('_')[1];
             const files = Array.from(e.target.files);
             
@@ -553,31 +642,69 @@ function inicializarPreviewsFotos() {
                     window.fotosPorCampo[campoId] = [];
                 }
                 
-                if (esDeCamara) {
-                    // Si es de la cámara, solo agregar la última foto (la nueva)
-                    const nuevaFoto = files[files.length - 1];
-                    window.fotosPorCampo[campoId].push(nuevaFoto);
-                } else {
-                    // Si es selección de archivos, agregar todas las nuevas fotos
-                    files.forEach(file => {
-                        // Verificar si la foto ya existe (por nombre y tamaño)
-                        const existe = window.fotosPorCampo[campoId].some(foto => 
-                            foto.name === file.name && foto.size === file.size
-                        );
-                        if (!existe) {
-                            window.fotosPorCampo[campoId].push(file);
-                        }
-                    });
+                // Mostrar indicador de carga
+                const preview = document.getElementById(`preview_${campoId}`);
+                if (preview) {
+                    const loadingMsg = document.createElement('div');
+                    loadingMsg.className = 'alert alert-info';
+                    loadingMsg.textContent = 'Optimizando imágenes...';
+                    preview.appendChild(loadingMsg);
                 }
                 
-                // Mostrar todas las fotos del campo
-                mostrarPreviewsFotos(campoId, window.fotosPorCampo[campoId]);
-                // Actualizar el input con todas las fotos
-                actualizarInputFotos(campoId, window.fotosPorCampo[campoId]);
-                
-                // Remover el atributo capture después de usar la cámara
-                if (esDeCamara) {
-                    this.removeAttribute('capture');
+                try {
+                    const optimizedFiles = [];
+                    
+                    for (const file of files) {
+                        // Solo optimizar si es una imagen
+                        if (file.type.startsWith('image/')) {
+                            try {
+                                const optimizedFile = await optimizarImagen(file);
+                                optimizedFiles.push(optimizedFile);
+                            } catch (error) {
+                                console.error('Error optimizando imagen:', error);
+                                // Si falla la optimización, usar el archivo original
+                                optimizedFiles.push(file);
+                            }
+                        } else {
+                            optimizedFiles.push(file);
+                        }
+                    }
+                    
+                    // Remover indicador de carga
+                    if (preview) {
+                        const loadingMsg = preview.querySelector('.alert-info');
+                        if (loadingMsg) loadingMsg.remove();
+                    }
+                    
+                    if (esDeCamara) {
+                        // Si es de la cámara, solo agregar la última foto (la nueva)
+                        const nuevaFoto = optimizedFiles[optimizedFiles.length - 1];
+                        window.fotosPorCampo[campoId].push(nuevaFoto);
+                    } else {
+                        // Si es selección de archivos, agregar todas las nuevas fotos
+                        optimizedFiles.forEach(file => {
+                            // Verificar si la foto ya existe (por nombre y tamaño)
+                            const existe = window.fotosPorCampo[campoId].some(foto => 
+                                foto.name === file.name && foto.size === file.size
+                            );
+                            if (!existe) {
+                                window.fotosPorCampo[campoId].push(file);
+                            }
+                        });
+                    }
+                    
+                    // Mostrar todas las fotos del campo
+                    mostrarPreviewsFotos(campoId, window.fotosPorCampo[campoId]);
+                    // Actualizar el input con todas las fotos
+                    actualizarInputFotos(campoId, window.fotosPorCampo[campoId]);
+                    
+                    // Remover el atributo capture después de usar la cámara
+                    if (esDeCamara) {
+                        this.removeAttribute('capture');
+                    }
+                } catch (error) {
+                    console.error('Error procesando imágenes:', error);
+                    alert('Error al procesar las imágenes. Por favor, intenta de nuevo.');
                 }
             }
         });
