@@ -228,14 +228,35 @@ async function optimizarImagen(file) {
             file.name.toLowerCase().endsWith('.heif') ||
             file.type === 'image/heic' ||
             file.type === 'image/heif') {
+            console.error('❌ ERROR CRÍTICO: Se intentó optimizar un HEIC sin convertir primero.');
             reject(new Error('ERROR CRÍTICO: Se intentó optimizar un HEIC sin convertir primero. El archivo debe convertirse a JPEG antes de optimizar.'));
             return;
         }
         
+        // Verificar que el tipo MIME sea compatible con Image
+        const compatibleTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/bmp'];
+        if (file.type && !compatibleTypes.includes(file.type.toLowerCase())) {
+            console.warn(`⚠️ ADVERTENCIA: Tipo MIME ${file.type} puede no ser compatible. Se intentará procesar.`);
+        }
+        
         const reader = new FileReader();
         reader.onload = function(e) {
+            // Verificar que el data URL sea válido antes de intentar cargarlo
+            const dataUrl = e.target.result;
+            if (!dataUrl || !dataUrl.startsWith('data:image/')) {
+                reject(new Error('Error: El archivo no es una imagen válida o no se pudo leer correctamente.'));
+                return;
+            }
+            
             const img = new Image();
+            
+            // Configurar timeout para evitar esperas infinitas
+            const timeout = setTimeout(() => {
+                reject(new Error('Timeout: La imagen tardó demasiado en cargar. Puede ser un formato no soportado.'));
+            }, 10000); // 10 segundos
+            
             img.onload = function() {
+                clearTimeout(timeout);
                 const MAX_FILE_SIZE = 0.5 * 1024 * 1024; // 0.5MB máximo
                 const MAX_DIMENSION_INITIAL = 2000;
                 const MAX_DIMENSION_AGGRESSIVE = 1200;
@@ -357,10 +378,28 @@ async function optimizarImagen(file) {
                 
                 optimize().catch(reject);
             };
-            img.onerror = function() {
-                reject(new Error('Error al cargar imagen'));
+            img.onerror = function(error) {
+                clearTimeout(timeout);
+                console.error('❌ Error al cargar imagen en Image object:', error);
+                console.error('Tipo de archivo:', file.type);
+                console.error('Nombre de archivo:', file.name);
+                
+                // Si es HEIC, dar mensaje más específico
+                if (file.name.toLowerCase().endsWith('.heic') || file.name.toLowerCase().endsWith('.heif')) {
+                    reject(new Error('Error: No se puede cargar imagen HEIC directamente. El archivo debe convertirse a JPEG primero. El backend lo procesará automáticamente.'));
+                } else {
+                    reject(new Error('Error al cargar imagen. El formato puede no ser compatible. El backend lo procesará automáticamente.'));
+                }
             };
-            img.src = e.target.result;
+            
+            // Intentar cargar la imagen
+            try {
+                img.src = dataUrl;
+            } catch (error) {
+                clearTimeout(timeout);
+                console.error('❌ Error al asignar src a Image:', error);
+                reject(new Error('Error al procesar imagen: ' + (error.message || 'Error desconocido')));
+            }
         };
         reader.onerror = function() {
             reject(new Error('Error al leer archivo'));
@@ -494,9 +533,20 @@ function inicializarPreviewsFotos() {
                                 
                                 optimizedFiles.push(optimizedFile);
                             } catch (error) {
-                                console.error('Error procesando imagen:', error);
+                                console.error('❌ Error procesando imagen:', error);
+                                console.error('Detalles del error:', error.message);
+                                
                                 // Si falla la optimización en cliente, usar el archivo original y dejar que el backend lo procese
-                                console.log('DEBUG: Fallo en optimización cliente, el backend procesará el archivo');
+                                console.log('DEBUG: Fallo en optimización cliente, el backend procesará el archivo automáticamente');
+                                
+                                // Si es HEIC, asegurarse de enviarlo al backend sin intentar optimizar
+                                if (file.name.toLowerCase().endsWith('.heic') || 
+                                    file.name.toLowerCase().endsWith('.heif') ||
+                                    file.type === 'image/heic' ||
+                                    file.type === 'image/heif') {
+                                    console.log('DEBUG: Archivo HEIC será procesado completamente por el backend');
+                                }
+                                
                                 optimizedFiles.push(file);
                             }
                         } else {
