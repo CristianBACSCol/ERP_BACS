@@ -223,8 +223,8 @@
 </div>
 
 <link rel="stylesheet" href="{{ url_for('static', filename='css/formulario.css') }}">
-<!-- Biblioteca para convertir HEIC a JPEG (no se usa en cliente, solo por si acaso) -->
-<script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
+<!-- Cargar heic2any loader (sin inline scripts para evitar CSP) -->
+<script src="{{ url_for('static', filename='js/heic-loader.js') }}?v=1.0"></script>
 <!-- Agregar versión para forzar recarga del caché -->
-<script src="{{ url_for('static', filename='js/formulario.js') }}?v=2.1" defer></script>
+<script src="{{ url_for('static', filename='js/formulario.js') }}?v=2.2" defer></script>
 {% endblock %}

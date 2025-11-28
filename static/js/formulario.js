@@ -1,6 +1,6 @@
 // Variables globales para las firmas
-// Versión: 2.1 - HEIC se procesa completamente en backend
-console.log('✅ formulario.js v2.1 cargado - HEIC se procesa en backend');
+// Versión: 2.2 - HEIC se intenta procesar en cliente primero, luego backend
+console.log('✅ formulario.js v2.2 cargado - HEIC se procesa en cliente primero, luego backend');
 let firmas = {};
 
 // Verificar que heic2any esté disponible
@@ -134,23 +134,28 @@ function guardarFirma(campoId) {
 async function convertirHEIC(file) {
     return new Promise(async (resolve, reject) => {
         const originalSize = (file.size / 1024 / 1024).toFixed(2);
-        console.log(`DEBUG: 🔄 Iniciando conversión HEIC: ${file.name} (${originalSize} MB)`);
+        console.log(`DEBUG: 🔄 [v2.2] Iniciando conversión HEIC: ${file.name} (${originalSize} MB)`);
         
         // Esperar a que heic2any esté disponible
         let attempts = 0;
-        const maxAttempts = 50; // 10 segundos máximo
+        const maxAttempts = 100; // 20 segundos máximo
         
         function waitForLibrary() {
             return new Promise((resolveWait, rejectWait) => {
                 function check() {
                     attempts++;
-                    if (typeof heic2any !== 'undefined' && (typeof heic2any === 'function' || typeof window.heic2any === 'function')) {
-                        console.log(`DEBUG: ✅ heic2any disponible después de ${attempts} intentos`);
+                    // Verificar múltiples formas de acceso a heic2any
+                    const heicAvailable = typeof heic2any !== 'undefined' || 
+                                         typeof window.heic2any !== 'undefined' ||
+                                         (window.heic2anyLoaded === true);
+                    
+                    if (heicAvailable) {
+                        console.log(`DEBUG: [v2.2] ✅ heic2any disponible después de ${attempts} intentos`);
                         resolveWait();
                     } else if (attempts < maxAttempts) {
                         setTimeout(check, 200);
                     } else {
-                        rejectWait(new Error('Biblioteca heic2any no disponible después de esperar 10 segundos'));
+                        rejectWait(new Error('Biblioteca heic2any no disponible después de esperar 20 segundos'));
                     }
                 }
                 check();
@@ -161,25 +166,39 @@ async function convertirHEIC(file) {
             await waitForLibrary();
             
             // Usar heic2any global o window.heic2any
-            const heicConverter = typeof heic2any !== 'undefined' ? heic2any : window.heic2any;
+            const heicConverter = typeof heic2any !== 'undefined' ? heic2any : 
+                                 typeof window.heic2any !== 'undefined' ? window.heic2any : null;
             
-            if (!heicConverter) {
-                throw new Error('heic2any no está disponible');
+            if (!heicConverter || typeof heicConverter !== 'function') {
+                throw new Error('heic2any no está disponible o no es una función válida');
             }
             
-            console.log(`DEBUG: 🔄 Ejecutando conversión con heic2any...`);
+            console.log(`DEBUG: [v2.2] 🔄 Ejecutando conversión con heic2any...`);
             
-            const conversionResult = await heicConverter({
+            // Ejecutar conversión con timeout
+            const conversionPromise = heicConverter({
                 blob: file,
                 toType: 'image/jpeg',
                 quality: 0.92
             });
+            
+            // Agregar timeout de 30 segundos
+            const timeoutPromise = new Promise((_, rejectTimeout) => {
+                setTimeout(() => rejectTimeout(new Error('Timeout: La conversión HEIC tardó más de 30 segundos')), 30000);
+            });
+            
+            const conversionResult = await Promise.race([conversionPromise, timeoutPromise]);
             
             // heic2any puede devolver un array o un blob directamente
             const blob = Array.isArray(conversionResult) ? conversionResult[0] : conversionResult;
             
             if (!blob || !(blob instanceof Blob)) {
                 throw new Error('La conversión HEIC no devolvió un blob válido');
+            }
+            
+            // Verificar que el blob tenga contenido
+            if (blob.size === 0) {
+                throw new Error('El blob convertido está vacío');
             }
             
             // Crear un nuevo File desde el blob convertido
@@ -189,11 +208,12 @@ async function convertirHEIC(file) {
             });
             
             const convertedSize = (convertedFile.size / 1024 / 1024).toFixed(2);
-            console.log(`DEBUG: ✅ HEIC convertido exitosamente - Original: ${originalSize} MB, Convertido: ${convertedSize} MB`);
+            console.log(`DEBUG: [v2.2] ✅ HEIC convertido exitosamente - Original: ${originalSize} MB, Convertido: ${convertedSize} MB`);
             
             resolve(convertedFile);
         } catch (error) {
-            console.error('❌ Error en convertirHEIC:', error);
+            console.error('❌ [v2.2] Error en convertirHEIC:', error);
+            console.error('❌ [v2.2] Stack:', error.stack);
             reject(new Error('Error al convertir HEIC: ' + (error.message || 'Error desconocido')));
         }
     });
@@ -452,13 +472,70 @@ function inicializarPreviewsFotos() {
                                      file.type === 'image/heif';
                         
                         if (isHeic) {
-                            // HEIC: Enviar directamente al backend - NO intentar procesar en cliente
-                            console.log(`DEBUG: 🔍 [v2.1] Archivo HEIC detectado: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`);
-                            console.log('DEBUG: [v2.1] El backend procesará, convertirá y optimizará el archivo HEIC automáticamente');
-                            console.log('DEBUG: [v2.1] NO se intentará procesar HEIC en cliente - se envía directamente al backend');
-                            updateLoadingMsg(`El backend procesará el archivo HEIC: ${file.name}...`);
-                            optimizedFiles.push(file);
-                            continue;  // Saltar al siguiente archivo - NO procesar en cliente
+                            console.log(`DEBUG: 🔍 [v2.2] Archivo HEIC detectado: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`);
+                            updateLoadingMsg(`Convirtiendo HEIC a JPEG: ${file.name}...`);
+                            
+                            // INTENTAR convertir en cliente PRIMERO - SI O SI
+                            let conversionSuccess = false;
+                            let convertedFile = null;
+                            
+                            try {
+                                // Esperar a que heic2any esté disponible con más tiempo
+                                let heicConverter = null;
+                                let attempts = 0;
+                                const maxAttempts = 100; // 20 segundos
+                                
+                                console.log('DEBUG: [v2.2] Esperando a que heic2any esté disponible...');
+                                while (attempts < maxAttempts && !heicConverter) {
+                                    if (typeof heic2any !== 'undefined') {
+                                        heicConverter = heic2any;
+                                        console.log(`DEBUG: [v2.2] ✅ heic2any disponible después de ${attempts} intentos`);
+                                        break;
+                                    }
+                                    await new Promise(resolve => setTimeout(resolve, 200));
+                                    attempts++;
+                                }
+                                
+                                if (heicConverter) {
+                                    console.log('DEBUG: [v2.2] 🔄 Iniciando conversión HEIC en cliente...');
+                                    convertedFile = await convertirHEIC(file);
+                                    
+                                    if (convertedFile && convertedFile.type === 'image/jpeg') {
+                                        const convertedSize = (convertedFile.size / 1024 / 1024).toFixed(2);
+                                        console.log(`DEBUG: [v2.2] ✅ HEIC convertido exitosamente en cliente - ${convertedSize} MB`);
+                                        updateLoadingMsg(`Optimizando imagen convertida (${convertedSize} MB)...`);
+                                        conversionSuccess = true;
+                                        
+                                        // Optimizar la imagen convertida
+                                        try {
+                                            const optimizedFile = await optimizarImagen(convertedFile);
+                                            const finalSize = (optimizedFile.size / 1024 / 1024).toFixed(2);
+                                            console.log(`DEBUG: [v2.2] ✅ HEIC procesado completamente - Tamaño final: ${finalSize} MB`);
+                                            optimizedFiles.push(optimizedFile);
+                                            continue; // Archivo procesado exitosamente
+                                        } catch (optError) {
+                                            console.warn('DEBUG: [v2.2] ⚠️ Error optimizando imagen convertida, usando versión convertida sin optimizar');
+                                            optimizedFiles.push(convertedFile);
+                                            continue;
+                                        }
+                                    } else {
+                                        console.warn('DEBUG: [v2.2] ⚠️ Conversión no produjo un JPEG válido');
+                                    }
+                                } else {
+                                    console.warn('DEBUG: [v2.2] ⚠️ heic2any no disponible después de 20 segundos');
+                                }
+                            } catch (conversionError) {
+                                console.error('DEBUG: [v2.2] ❌ Error convirtiendo HEIC en cliente:', conversionError);
+                                console.error('DEBUG: [v2.2] Stack trace:', conversionError.stack);
+                            }
+                            
+                            // Si la conversión falló, enviar al backend
+                            if (!conversionSuccess) {
+                                console.log('DEBUG: [v2.2] ⚠️ Conversión en cliente falló, el backend procesará el archivo HEIC');
+                                updateLoadingMsg(`El backend procesará el archivo HEIC: ${file.name}...`);
+                                optimizedFiles.push(file);
+                                continue;
+                            }
                         }
                         
                         // Solo procesar imágenes que NO sean HEIC
