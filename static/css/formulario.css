@@ -1,0 +1,237 @@
+/* Estilos específicos para formularios dinámicos */
+.campo-informativo {
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.campo-informativo h4 {
+    margin-top: 0;
+    color: #2c3e50;
+}
+
+.seleccion-multiple-container {
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    padding: 15px;
+    background: #f8f9fa;
+}
+
+.menu-seleccion {
+    margin-bottom: 15px;
+}
+
+.menu-seleccion h5 {
+    margin-bottom: 10px;
+    color: #495057;
+}
+
+.submenu-campos {
+    margin-top: 10px;
+    padding-left: 20px;
+    border-left: 2px solid #dee2e6;
+}
+
+.firma-container {
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    padding: 20px;
+    background: white;
+}
+
+.firma-info-section {
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 20px;
+}
+
+.firma-info-section h5 {
+    color: #2c3e50;
+    margin-bottom: 15px;
+    font-weight: bold;
+}
+
+.firma-signature-section {
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    padding: 15px;
+    background: white;
+}
+
+.firma-signature-section h5 {
+    color: #2c3e50;
+    margin-bottom: 15px;
+    font-weight: bold;
+}
+
+.firma-canvas {
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    cursor: crosshair;
+    display: block;
+    margin-bottom: 10px;
+    touch-action: none;
+    -ms-touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.firma-controls {
+    display: flex;
+    gap: 10px;
+    margin-top: 10px;
+    justify-content: center;
+}
+
+.foto-container {
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    padding: 15px;
+    background: #f8f9fa;
+}
+
+.foto-input-group {
+    margin-bottom: 10px;
+}
+
+.foto-input-info {
+    margin-top: 5px;
+}
+
+.foto-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 10px;
+    flex-wrap: wrap;
+}
+
+.fotos-preview {
+    margin-top: 15px;
+}
+
+.fotos-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 10px;
+}
+
+.foto-item {
+    position: relative;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    overflow: hidden;
+    background: white;
+}
+
+.foto-item img {
+    width: 100%;
+    max-width: 100%;
+    height: auto;
+    max-height: 120px;
+    object-fit: contain;
+    display: block;
+}
+
+.foto-item .foto-remove {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    background: rgba(220, 53, 69, 0.8);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 25px;
+    height: 25px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+}
+
+.foto-item .foto-remove:hover {
+    background: rgba(220, 53, 69, 1);
+}
+
+.foto-item .foto-info {
+    padding: 5px;
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    font-size: 11px;
+    text-align: center;
+}
+
+.foto-item .foto-info small {
+    display: block;
+    margin: 1px 0;
+}
+
+.form-scroll-spacer {
+    height: 80px;
+}
+
+.form-container {
+    padding-bottom: 80px;
+}
+
+select.form-control, .menu-select, .form-control {
+    max-width: 100%;
+}
+
+@media (max-width: 576px) {
+    .form-scroll-spacer {
+        height: 120px;
+    }
+    
+    .form-container {
+        padding-bottom: 120px;
+    }
+    
+    .foto-item img {
+        max-width: 100%;
+        width: 100%;
+        height: auto;
+        max-height: 60px;
+        object-fit: contain;
+        display: block;
+    }
+    
+    .fotos-grid {
+        grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+        gap: 5px;
+    }
+}
+
+@media (max-width: 768px) {
+    .firma-canvas {
+        width: 100%;
+        height: 150px;
+    }
+    
+    .firma-controls {
+        flex-direction: column;
+    }
+    
+    .foto-item img {
+        max-width: 100%;
+        width: 100%;
+        height: auto;
+        max-height: 80px;
+        object-fit: contain;
+        display: block;
+    }
+    
+    .fotos-grid {
+        grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+        gap: 8px;
+    }
+}
+
