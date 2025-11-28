@@ -1,6 +1,6 @@
 // Variables globales para las firmas
-// Versión: 2.0 - HEIC se procesa completamente en backend
-console.log('✅ formulario.js v2.0 cargado - HEIC se procesa en backend');
+// Versión: 2.1 - HEIC se procesa completamente en backend
+console.log('✅ formulario.js v2.1 cargado - HEIC se procesa en backend');
 let firmas = {};
 
 // Verificar que heic2any esté disponible
@@ -453,9 +453,9 @@ function inicializarPreviewsFotos() {
                         
                         if (isHeic) {
                             // HEIC: Enviar directamente al backend - NO intentar procesar en cliente
-                            console.log(`DEBUG: 🔍 [v2.0] Archivo HEIC detectado: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`);
-                            console.log('DEBUG: [v2.0] El backend procesará, convertirá y optimizará el archivo HEIC automáticamente');
-                            console.log('DEBUG: [v2.0] NO se intentará procesar HEIC en cliente - se envía directamente al backend');
+                            console.log(`DEBUG: 🔍 [v2.1] Archivo HEIC detectado: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`);
+                            console.log('DEBUG: [v2.1] El backend procesará, convertirá y optimizará el archivo HEIC automáticamente');
+                            console.log('DEBUG: [v2.1] NO se intentará procesar HEIC en cliente - se envía directamente al backend');
                             updateLoadingMsg(`El backend procesará el archivo HEIC: ${file.name}...`);
                             optimizedFiles.push(file);
                             continue;  // Saltar al siguiente archivo - NO procesar en cliente
@@ -696,7 +696,7 @@ if (formulario) {
                     
                     if (isHeic) {
                         archivosHEIC.push(file.name);
-                        console.log(`DEBUG: [v2.0] Archivo HEIC permitido para envío: ${file.name} - El backend lo procesará`);
+                        console.log(`DEBUG: [v2.1] Archivo HEIC permitido para envío: ${file.name} - El backend lo procesará`);
                         // NO bloquear HEIC - el backend los procesará
                         continue;
                     }
@@ -714,7 +714,7 @@ if (formulario) {
         
         // NO bloquear HEIC - el backend los procesará automáticamente
         if (archivosHEIC.length > 0) {
-            console.log(`DEBUG: [v2.0] Se enviarán ${archivosHEIC.length} archivo(s) HEIC al backend para procesamiento automático`);
+            console.log(`DEBUG: [v2.1] Se enviarán ${archivosHEIC.length} archivo(s) HEIC al backend para procesamiento automático`);
         }
         
         if (archivosGrandes.length > 0) {
