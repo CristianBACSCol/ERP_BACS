@@ -96,6 +96,18 @@
     overflow: hidden;
 }
 
+/* Modal grande para formularios con más contenido */
+.modal-large {
+    max-width: 800px !important;
+    width: 90% !important;
+}
+
+/* Modal pequeño para confirmaciones */
+.modal-small {
+    max-width: 400px !important;
+    width: 90% !important;
+}
+
 /* Ajustes para móviles */
 @media (max-width: 768px) {
     .modal {
@@ -156,12 +168,27 @@
     overflow-y: auto;
     overflow-x: hidden;
     flex: 1 1 auto; /* Permite que crezca y se encoja según el contenido */
-    min-height: 0; /* Permite que el flex funcione correctamente */
+    min-height: 200px; /* Altura mínima para evitar que sea muy pequeño */
     /* El scroll interno se manejará automáticamente cuando el contenido exceda la altura disponible */
     /* Calcular altura máxima dinámicamente basada en el viewport */
-    max-height: calc(100vh - 180px); /* Considerando header (~60px) + footer (~60px) + padding (40px) + margen (20px) */
+    max-height: calc(100vh - 200px); /* Considerando header (~70px) + footer (~70px) + padding (40px) + margen (20px) */
     /* Asegurar que el fondo se adapte al contenido */
     background-color: #fff;
+    /* Asegurar que los campos no se sobrepongan */
+    box-sizing: border-box;
+}
+
+/* Asegurar que los form-groups dentro del modal tengan espacio suficiente */
+.modal-body .form-group {
+    margin-bottom: 1rem;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.modal-body .form-control {
+    width: 100%;
+    box-sizing: border-box;
+    margin-bottom: 0;
 }
 
 /* Ajustes para móviles en modal-body */
