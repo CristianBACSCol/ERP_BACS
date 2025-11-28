@@ -15,7 +15,7 @@ from PIL import Image as PILImage
 import io
 
 from config import Config
-from r2_storage import upload_file_to_r2, download_file_from_r2, download_to_temp_file, file_exists_in_r2, get_file_url_from_r2, delete_file_from_r2
+from r2_storage import upload_file_to_r2, download_file_from_r2, download_to_temp_file, file_exists_in_r2, get_file_url_from_r2, delete_file_from_r2, get_presigned_upload_url
 
 # Registrar soporte para HEIC/HEIF al inicio de la aplicación
 try:
@@ -2610,12 +2610,20 @@ def diligenciar_formulario(id):
                         respuesta_campo.empresa_firmante = request.form.get(f'empresa_{campo.id}', '')
                         respuesta_campo.cargo_firmante = request.form.get(f'cargo_{campo.id}', '')
                 elif campo.tipo_campo == 'foto':
-                    # Procesar fotos múltiples con renombrado automático
-                    archivos = request.files.getlist(f'campo_{campo.id}')
-                    print(f"DEBUG: Campo {campo.id} - Recibidos {len(archivos)} archivos")
-                    
+                    # Verificar si las imágenes ya fueron subidas directamente a R2
+                    uploaded_files = request.form.get(f'campo_{campo.id}_uploaded')
                     nombres_archivos = []
-                    for i, archivo in enumerate(archivos):
+                    
+                    if uploaded_files:
+                        # Las imágenes ya fueron subidas directamente a R2
+                        nombres_archivos = [f.strip() for f in uploaded_files.split(',') if f.strip()]
+                        print(f"DEBUG: Campo {campo.id} - Usando archivos ya subidos a R2: {nombres_archivos}")
+                    else:
+                        # Procesar fotos múltiples con renombrado automático (modo legacy)
+                        archivos = request.files.getlist(f'campo_{campo.id}')
+                        print(f"DEBUG: Campo {campo.id} - Recibidos {len(archivos)} archivos (modo legacy)")
+                        
+                        for i, archivo in enumerate(archivos):
                         print(f"DEBUG: Archivo {i+1}: {archivo.filename if archivo.filename else 'Sin nombre'}")
                         if archivo and archivo.filename:
                             # Validar tamaño del archivo antes de procesar (límite:  20MB)
@@ -2994,6 +3002,56 @@ def descargar_formulario_pdf_file(id):
         as_attachment=True,
         download_name=respuesta_formulario.archivo_pdf
     )
+
+
+@app.route('/api/presigned-upload-url', methods=['POST'])
+@login_required
+def get_presigned_upload_url_endpoint():
+    """Genera una URL presignada para subir un archivo directamente a R2"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No se proporcionaron datos'}), 400
+        
+        filename = data.get('filename')
+        content_type = data.get('content_type', 'application/octet-stream')
+        campo_id = data.get('campo_id')
+        respuesta_formulario_id = data.get('respuesta_formulario_id')
+        
+        if not filename:
+            return jsonify({'error': 'Se requiere el nombre del archivo'}), 400
+        
+        # Generar nombre único para el archivo
+        from datetime import datetime
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        file_extension = os.path.splitext(filename)[1] or '.jpg'
+        
+        # Construir ruta en R2
+        if campo_id and respuesta_formulario_id:
+            unique_filename = f'foto_{campo_id}_{respuesta_formulario_id}_{timestamp}{file_extension}'
+        else:
+            unique_filename = f'upload_{timestamp}{file_extension}'
+        
+        r2_path = f'Formularios/imagenes/{unique_filename}'
+        
+        # Generar URL presignada
+        presigned_data = get_presigned_upload_url(r2_path, content_type=content_type, expires_in=3600)
+        
+        if not presigned_data:
+            return jsonify({'error': 'No se pudo generar la URL presignada. Verifica la configuración de R2.'}), 500
+        
+        return jsonify({
+            'url': presigned_data['url'],
+            'r2_path': r2_path,
+            'filename': unique_filename
+        }), 200
+        
+    except Exception as e:
+        print(f"ERROR generando presigned URL: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
 
 @app.route('/api/formularios/<int:id>/campos', methods=['POST'])
 @login_required

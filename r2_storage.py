@@ -211,6 +211,52 @@ def get_file_url_from_r2(r2_path, expires_in=3600):
         return None
 
 
+def get_presigned_upload_url(r2_path, content_type=None, expires_in=3600):
+    """
+    Genera una URL presignada para SUBIR un archivo a R2
+    
+    Args:
+        r2_path: Ruta del archivo en R2 donde se subirá
+        content_type: Tipo MIME del archivo (opcional)
+        expires_in: Tiempo de expiración en segundos (default: 1 hora)
+    
+    Returns:
+        dict: {'url': str, 'fields': dict} para POST multipart, o {'url': str} para PUT directo, o None si hay error
+    """
+    try:
+        s3_client = get_r2_client()
+        if s3_client is None:
+            # Modo local: retornar None (no se puede usar presigned URLs en modo local)
+            print(f"DEBUG: Modo local, no se puede generar presigned URL para subida")
+            return None
+        
+        bucket_name = get_bucket_name()
+        
+        # Generar URL presignada para PUT (subida directa)
+        # Usamos PUT en lugar de POST multipart para simplificar
+        params = {
+            'Bucket': bucket_name,
+            'Key': r2_path
+        }
+        
+        if content_type:
+            params['ContentType'] = content_type
+        
+        url = s3_client.generate_presigned_url(
+            'put_object',
+            Params=params,
+            ExpiresIn=expires_in
+        )
+        
+        print(f"DEBUG: Presigned URL generada para subida: {r2_path}")
+        return {'url': url}
+    except Exception as e:
+        print(f"ERROR generando presigned URL para subida {r2_path}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+
 def file_exists_in_r2(r2_path):
     """
     Verifica si un archivo existe en R2

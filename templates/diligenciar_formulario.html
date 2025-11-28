@@ -799,6 +799,156 @@ document.getElementById('formularioDiligenciar').addEventListener('submit', func
     console.log('DEBUG: Todas las firmas procesadas, enviando formulario...');
 });
 
+// Función para subir una imagen directamente a R2
+async function subirImagenAR2(file, campoId, respuestaFormularioId) {
+    try {
+        // Obtener presigned URL del servidor
+        const response = await fetch('/api/presigned-upload-url', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                filename: file.name,
+                content_type: file.type || 'image/jpeg',
+                campo_id: campoId,
+                respuesta_formulario_id: respuestaFormularioId
+            })
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Error al obtener URL presignada');
+        }
+        
+        const data = await response.json();
+        const uploadUrl = data.url;
+        const r2Path = data.r2_path;
+        const filename = data.filename;
+        
+        // Subir archivo directamente a R2
+        const uploadResponse = await fetch(uploadUrl, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': file.type || 'image/jpeg',
+            },
+            body: file
+        });
+        
+        if (!uploadResponse.ok) {
+            throw new Error(`Error al subir archivo: ${uploadResponse.statusText}`);
+        }
+        
+        console.log(`DEBUG: Imagen subida exitosamente a R2: ${filename}`);
+        return filename; // Retornar solo el nombre del archivo (sin ruta completa)
+        
+    } catch (error) {
+        console.error(`ERROR subiendo imagen ${file.name}:`, error);
+        throw error;
+    }
+}
+
+// Interceptar el submit para subir imágenes primero
+document.getElementById('formularioDiligenciar').addEventListener('submit', async function(e) {
+    // Verificar si hay imágenes para subir
+    const fotoInputs = document.querySelectorAll('input[type="file"][id^="campo_"]');
+    let tieneImagenes = false;
+    for (let input of fotoInputs) {
+        if (input.files && input.files.length > 0) {
+            tieneImagenes = true;
+            break;
+        }
+    }
+    
+    // Si hay imágenes, subirlas primero
+    if (tieneImagenes) {
+        e.preventDefault();
+        
+        try {
+            // Obtener el ID del formulario de la URL
+            const urlParts = window.location.pathname.split('/');
+            const formularioId = urlParts[urlParts.length - 1];
+            
+            // Obtener respuesta_formulario_id si existe
+            let respuestaFormularioId = 0;
+            const respuestaIdInput = document.querySelector('input[name="respuesta_formulario_id"]');
+            if (respuestaIdInput) {
+                respuestaFormularioId = respuestaIdInput.value || 0;
+            }
+            
+            // Procesar todos los campos de foto
+            const uploadPromises = [];
+            const archivosSubidos = {}; // {campoId: [filename1, filename2, ...]}
+            
+            for (let input of fotoInputs) {
+                const campoId = input.id.split('_')[1];
+                const files = Array.from(input.files);
+                
+                if (files.length > 0) {
+                    if (!archivosSubidos[campoId]) {
+                        archivosSubidos[campoId] = [];
+                    }
+                    
+                    // Subir cada archivo
+                    for (let file of files) {
+                        uploadPromises.push(
+                            subirImagenAR2(file, campoId, respuestaFormularioId)
+                                .then(filename => {
+                                    archivosSubidos[campoId].push(filename);
+                                    console.log(`DEBUG: Archivo ${file.name} subido como ${filename}`);
+                                })
+                                .catch(error => {
+                                    console.error(`ERROR subiendo ${file.name}:`, error);
+                                    alert(`Error al subir ${file.name}: ${error.message}`);
+                                    throw error;
+                                })
+                        );
+                    }
+                }
+            }
+            
+            // Esperar a que todas las imágenes se suban
+            if (uploadPromises.length > 0) {
+                console.log(`DEBUG: Esperando a que se suban ${uploadPromises.length} imágenes...`);
+                await Promise.all(uploadPromises);
+                console.log('DEBUG: Todas las imágenes subidas exitosamente');
+                
+                // Guardar las rutas de los archivos subidos en campos ocultos
+                for (let campoId in archivosSubidos) {
+                    const filenames = archivosSubidos[campoId].join(',');
+                    // Crear o actualizar campo oculto con las rutas
+                    let hiddenInput = document.getElementById(`campo_${campoId}_uploaded`);
+                    if (!hiddenInput) {
+                        hiddenInput = document.createElement('input');
+                        hiddenInput.type = 'hidden';
+                        hiddenInput.id = `campo_${campoId}_uploaded`;
+                        hiddenInput.name = `campo_${campoId}_uploaded`;
+                        document.getElementById('formularioDiligenciar').appendChild(hiddenInput);
+                    }
+                    hiddenInput.value = filenames;
+                    
+                    // Limpiar el input de archivo para que no se envíe
+                    const fileInput = document.getElementById(`campo_${campoId}`);
+                    if (fileInput) {
+                        fileInput.value = '';
+                    }
+                }
+            }
+            
+            console.log('DEBUG: Todas las imágenes procesadas, enviando formulario...');
+            
+            // Enviar el formulario normalmente (sin los archivos, solo con las rutas)
+            this.submit();
+            
+        } catch (error) {
+            console.error('ERROR procesando imágenes:', error);
+            alert('Error al subir las imágenes. Por favor intenta nuevamente.');
+            return false;
+        }
+    }
+    // Si no hay imágenes, el formulario se envía normalmente
+});
+
 // Event listeners para botones de firma
 document.addEventListener('DOMContentLoaded', function() {
     // Manejar botones de firma
