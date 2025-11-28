@@ -2618,7 +2618,7 @@ def diligenciar_formulario(id):
                     for i, archivo in enumerate(archivos):
                         print(f"DEBUG: Archivo {i+1}: {archivo.filename if archivo.filename else 'Sin nombre'}")
                         if archivo and archivo.filename:
-                            # Validar tamaño del archivo antes de procesar (límite: 20MB)
+                            # Validar tamaño del archivo antes de procesar (límite:  20MB)
                             archivo.seek(0, 2)  # Ir al final
                             file_size = archivo.tell()
                             archivo.seek(0)  # Volver al inicio
