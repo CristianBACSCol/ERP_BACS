@@ -48,7 +48,7 @@
 
 /* Estilos para Modal */
 .modal {
-    display: none; /* Se cambiará a flex cuando se muestre */
+    display: none;
     position: fixed;
     z-index: 1000;
     left: 0;
@@ -59,18 +59,18 @@
     animation: fadeIn 0.3s ease;
     overflow-y: auto;
     overflow-x: hidden;
-    -webkit-overflow-scrolling: touch; /* Smooth scrolling en iOS */
-    /* Centrar el contenido verticalmente */
-    align-items: flex-start;
-    justify-content: center;
+    -webkit-overflow-scrolling: touch;
     padding: 20px;
     box-sizing: border-box;
 }
 
-/* Cuando el modal está visible, usar flex */
+/* Cuando el modal está visible */
 .modal[style*="display: flex"],
-.modal[style*="display:block"] {
+.modal[style*="display:block"],
+.modal[style*="display: block"] {
     display: flex !important;
+    align-items: center;
+    justify-content: center;
 }
 
 .modal-content {
@@ -83,16 +83,10 @@
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
     animation: slideIn 0.3s ease;
     position: relative;
-    max-height: calc(100vh - 40px);
+    max-height: 90vh;
     display: flex;
     flex-direction: column;
-    /* Asegurar que el modal esté siempre visible y centrado */
-    margin-top: 20px;
-    margin-bottom: 20px;
     flex-shrink: 0;
-    /* Permitir que el contenido determine la altura mínima pero respetar max-height */
-    min-height: auto;
-    /* Asegurar que el fondo se adapte al contenido */
     overflow: hidden;
 }
 
@@ -100,6 +94,7 @@
 .modal-large {
     max-width: 800px !important;
     width: 90% !important;
+    min-width: 600px !important;
 }
 
 /* Modal pequeño para confirmaciones */
@@ -167,28 +162,34 @@
     padding: 20px;
     overflow-y: auto;
     overflow-x: hidden;
-    flex: 1 1 auto; /* Permite que crezca y se encoja según el contenido */
-    min-height: 200px; /* Altura mínima para evitar que sea muy pequeño */
-    /* El scroll interno se manejará automáticamente cuando el contenido exceda la altura disponible */
-    /* Calcular altura máxima dinámicamente basada en el viewport */
-    max-height: calc(100vh - 200px); /* Considerando header (~70px) + footer (~70px) + padding (40px) + margen (20px) */
-    /* Asegurar que el fondo se adapte al contenido */
+    flex: 1;
+    min-height: 0;
     background-color: #fff;
-    /* Asegurar que los campos no se sobrepongan */
     box-sizing: border-box;
 }
 
 /* Asegurar que los form-groups dentro del modal tengan espacio suficiente */
 .modal-body .form-group {
-    margin-bottom: 1rem;
-    width: 100%;
+    margin-bottom: 1.5rem !important;
+    width: 100% !important;
     box-sizing: border-box;
+    display: block !important;
+    clear: both;
 }
 
 .modal-body .form-control {
-    width: 100%;
+    width: 100% !important;
     box-sizing: border-box;
     margin-bottom: 0;
+    display: block !important;
+    max-width: 100%;
+}
+
+.modal-body .form-label {
+    display: block !important;
+    margin-bottom: 0.5rem;
+    width: 100% !important;
+    clear: both;
 }
 
 /* Ajustes para móviles en modal-body */
