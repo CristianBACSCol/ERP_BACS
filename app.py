@@ -2783,11 +2783,26 @@ def diligenciar_formulario(id):
                                 r2_path = f'Formularios/imagenes/{unique_filename}'
                                 
                                 print(f"DEBUG: Guardando imagen optimizada en R2 como: {r2_path} (Formato original: {original_format})")
+                                print(f"DEBUG: Tamaño del buffer a subir: {len(img_buffer.getvalue())} bytes")
+                                
+                                # Verificar que el buffer tenga datos
+                                img_buffer.seek(0)
+                                if len(img_buffer.getvalue()) == 0:
+                                    print(f"ERROR: Buffer de imagen está vacío, no se puede subir")
+                                    continue
+                                
+                                img_buffer.seek(0)
                                 if upload_file_to_r2(img_buffer, r2_path, content_type='image/jpeg'):
                                     nombres_archivos.append(unique_filename)
-                                    print(f"DEBUG: Archivo guardado exitosamente en R2: {unique_filename} (Tamaño: {original_size}, Reducción: {reduction:.1f}%)")
+                                    print(f"DEBUG: ✅ Archivo guardado exitosamente en R2: {unique_filename} (Tamaño: {original_size}, Reducción: {reduction:.1f}%)")
+                                    
+                                    # Verificar que el archivo realmente se subió
+                                    if file_exists_in_r2(r2_path):
+                                        print(f"DEBUG: ✅ Verificación: Archivo confirmado en R2: {r2_path}")
+                                    else:
+                                        print(f"ERROR: ⚠️ Archivo no encontrado en R2 después de subir: {r2_path}")
                                 else:
-                                    print(f"DEBUG: Error al guardar archivo en R2: {unique_filename}")
+                                    print(f"ERROR: ❌ Error al guardar archivo en R2: {unique_filename}")
                                     
                             except Exception as img_error:
                                 print(f"ERROR procesando imagen {archivo.filename}: {img_error}")
@@ -3858,11 +3873,37 @@ def generar_pdf_formulario(respuesta_formulario):
                     # Procesar fotos con redimensionamiento inteligente
                     for foto_filename in fotos_list:
                         foto_filename = foto_filename.strip()
+                        if not foto_filename:
+                            continue
+                            
                         # Buscar foto en R2: Formularios/imagenes/nombre_archivo
                         r2_foto_path = f'Formularios/imagenes/{foto_filename}'
                         
-                        # Descargar temporalmente para generar PDF
-                        foto_path = download_to_temp_file(r2_foto_path)
+                        print(f"DEBUG: Intentando descargar imagen de R2: {r2_foto_path}")
+                        
+                        # Verificar primero si existe en R2
+                        if not file_exists_in_r2(r2_foto_path):
+                            print(f"ERROR: Imagen no encontrada en R2: {r2_foto_path}")
+                            # Intentar también en modo local
+                            from r2_storage import get_local_storage_path
+                            base_path = get_local_storage_path()
+                            local_path = os.path.join(base_path, r2_foto_path)
+                            if os.path.exists(local_path):
+                                print(f"DEBUG: Imagen encontrada en almacenamiento local: {local_path}")
+                                foto_path = local_path
+                            else:
+                                print(f"ERROR: Imagen no encontrada ni en R2 ni localmente: {r2_foto_path}")
+                                continue
+                        else:
+                            print(f"DEBUG: Imagen existe en R2, descargando...")
+                            # Descargar temporalmente para generar PDF
+                            foto_path = download_to_temp_file(r2_foto_path)
+                            
+                            if not foto_path:
+                                print(f"ERROR: No se pudo descargar imagen de R2: {r2_foto_path}")
+                                continue
+                        
+                        print(f"DEBUG: Imagen descargada exitosamente: {foto_path}")
                         
                         if foto_path and os.path.exists(foto_path):
                             try:
@@ -3931,11 +3972,19 @@ def generar_pdf_formulario(respuesta_formulario):
                                     story.append(image_table)
                                     story.append(Spacer(1, 10))  # Espacio entre fotos
                                     
+                                    print(f"DEBUG: Imagen agregada exitosamente al PDF: {foto_filename}")
+                                    
                                     # NO eliminar archivo temporal aquí - se eliminará después de generar el PDF
                                     
                             except Exception as e:
-                                print(f"Error procesando imagen {foto_filename}: {e}")
+                                print(f"ERROR procesando imagen {foto_filename}: {e}")
+                                import traceback
+                                traceback.print_exc()
+                                # Continuar con la siguiente imagen
                                 continue
+                        else:
+                            print(f"ERROR: Archivo de imagen no existe después de descargar: {foto_path}")
+                            continue
                 else:
                     valor = ""
             
@@ -3955,9 +4004,12 @@ def generar_pdf_formulario(respuesta_formulario):
         footer = Paragraph(footer_text, styles['Normal'])
         story.append(footer)
         
-        # Construir el PDF
+        # Construir el PDF (esto descarga y procesa todas las imágenes)
+        print(f"DEBUG: Construyendo PDF (esto descargará todas las imágenes de R2)...")
         doc.build(story)
         buffer.seek(0)
+        
+        print(f"DEBUG: PDF construido exitosamente, tamaño: {len(buffer.getvalue())} bytes")
         
         # Guardar archivo en R2: Formularios/nombreformulario/documento.pdf
         formulario_nombre = secure_filename(respuesta_formulario.formulario.nombre)
@@ -3975,6 +4027,7 @@ def generar_pdf_formulario(respuesta_formulario):
             return None
         
         # Esperar 5 segundos antes de eliminar imágenes y firmas
+        # Esto asegura que el PDF esté completamente guardado antes de limpiar
         import time
         print(f"DEBUG: Esperando 5 segundos antes de limpiar archivos de imágenes y firmas...")
         time.sleep(5)

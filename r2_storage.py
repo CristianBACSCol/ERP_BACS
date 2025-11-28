@@ -95,12 +95,22 @@ def upload_file_to_r2(file_data, r2_path, content_type=None):
         
         # Subir a R2
         try:
+            print(f"DEBUG: Subiendo archivo a R2 - Bucket: {bucket_name}, Key: {r2_path}, Tamaño: {len(body)} bytes")
             s3_client.put_object(
                 Bucket=bucket_name,
                 Key=r2_path,
                 Body=body,
                 ContentType=content_type
             )
+            print(f"DEBUG: ✅ Archivo subido exitosamente a R2: {r2_path}")
+            
+            # Verificar que el archivo se subió correctamente
+            try:
+                s3_client.head_object(Bucket=bucket_name, Key=r2_path)
+                print(f"DEBUG: ✅ Verificación: Archivo confirmado en R2: {r2_path}")
+            except Exception as verify_error:
+                print(f"ERROR: ⚠️ No se pudo verificar archivo en R2: {verify_error}")
+            
             return True
         except Exception as upload_error:
             # Si el error es de credenciales, proporcionar mensaje más claro
@@ -134,24 +144,31 @@ def download_file_from_r2(r2_path):
         s3_client = get_r2_client()
         if s3_client is None:
             # Modo local: leer de sistema de archivos local
+            print(f"DEBUG: Modo local, leyendo de almacenamiento local: {r2_path}")
             return download_file_from_local(r2_path)
         
         bucket_name = get_bucket_name()
+        print(f"DEBUG: Descargando de R2 - Bucket: {bucket_name}, Key: {r2_path}")
         
         response = s3_client.get_object(
             Bucket=bucket_name,
             Key=r2_path
         )
         
-        return response['Body'].read()
+        file_data = response['Body'].read()
+        print(f"DEBUG: Archivo descargado de R2 exitosamente, tamaño: {len(file_data)} bytes")
+        return file_data
     except ClientError as e:
-        if e.response['Error']['Code'] == 'NoSuchKey':
-            print(f"Archivo no encontrado en R2: {r2_path}")
+        error_code = e.response.get('Error', {}).get('Code', 'Unknown')
+        if error_code == 'NoSuchKey':
+            print(f"ERROR: Archivo no encontrado en R2: {r2_path}")
         else:
-            print(f"ERROR descargando archivo de R2 {r2_path}: {str(e)}")
+            print(f"ERROR descargando archivo de R2 {r2_path}: {error_code} - {str(e)}")
         return None
     except Exception as e:
         print(f"ERROR descargando archivo de R2 {r2_path}: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return None
 
 
@@ -208,22 +225,30 @@ def file_exists_in_r2(r2_path):
         s3_client = get_r2_client()
         if s3_client is None:
             # Modo local: verificar en sistema de archivos local
-            return file_exists_in_local(r2_path)
+            exists = file_exists_in_local(r2_path)
+            print(f"DEBUG: Verificación local - {r2_path}: {'existe' if exists else 'no existe'}")
+            return exists
         
         bucket_name = get_bucket_name()
+        print(f"DEBUG: Verificando existencia en R2 - Bucket: {bucket_name}, Key: {r2_path}")
         
         s3_client.head_object(
             Bucket=bucket_name,
             Key=r2_path
         )
+        print(f"DEBUG: Archivo existe en R2: {r2_path}")
         return True
     except ClientError as e:
-        if e.response['Error']['Code'] == '404':
+        error_code = e.response.get('Error', {}).get('Code', 'Unknown')
+        if error_code == '404' or error_code == 'NoSuchKey':
+            print(f"DEBUG: Archivo no existe en R2 (404/NoSuchKey): {r2_path}")
             return False
-        print(f"ERROR verificando archivo en R2 {r2_path}: {str(e)}")
+        print(f"ERROR verificando archivo en R2 {r2_path}: {error_code} - {str(e)}")
         return False
     except Exception as e:
         print(f"ERROR verificando archivo en R2 {r2_path}: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return False
 
 
@@ -266,9 +291,17 @@ def download_to_temp_file(r2_path):
         str: Ruta del archivo temporal, o None si hay error
     """
     try:
+        print(f"DEBUG: Descargando archivo de R2: {r2_path}")
         file_data = download_file_from_r2(r2_path)
         if file_data is None:
+            print(f"ERROR: No se pudo descargar archivo de R2 (file_data es None): {r2_path}")
             return None
+        
+        if len(file_data) == 0:
+            print(f"ERROR: Archivo descargado está vacío: {r2_path}")
+            return None
+        
+        print(f"DEBUG: Archivo descargado exitosamente, tamaño: {len(file_data)} bytes")
         
         # Crear archivo temporal
         suffix = os.path.splitext(r2_path)[1] or '.tmp'
@@ -276,9 +309,12 @@ def download_to_temp_file(r2_path):
         temp_file.write(file_data)
         temp_file.close()
         
+        print(f"DEBUG: Archivo temporal creado: {temp_file.name}")
         return temp_file.name
     except Exception as e:
         print(f"ERROR descargando archivo temporal de R2 {r2_path}: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return None
 
 
