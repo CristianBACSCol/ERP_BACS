@@ -2646,39 +2646,56 @@ def diligenciar_formulario(id):
                                     # Detectar formato de imagen por extensión o contenido
                                     file_extension = os.path.splitext(archivo.filename)[1].lower() if archivo.filename else ''
                                     
+                                    # Validar formato de imagen permitido
+                                    ALLOWED_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.heic', '.heif', '.bmp', '.tiff', '.tif'}
+                                    if file_extension and file_extension not in ALLOWED_EXTENSIONS:
+                                        error_msg = f"Formato de imagen no soportado: {file_extension}. Formatos permitidos: JPG, PNG, GIF, WebP, HEIC, HEIF, BMP, TIFF"
+                                        print(f"ERROR: {error_msg}")
+                                        flash(error_msg, 'error')
+                                        continue
+                                    
                                     # Si es HEIC/HEIF, registrar soporte ANTES de intentar abrir
                                     if file_extension in ['.heic', '.heif']:
                                         try:
                                             from pillow_heif import register_heif_opener
                                             register_heif_opener()
-                                            print(f"DEBUG: Soporte HEIC registrado para {archivo.filename}")
+                                            print(f"DEBUG: ✅ Soporte HEIC registrado para {archivo.filename}")
                                         except ImportError:
                                             error_msg = f"ERROR: No se puede procesar imagen HEIC. Instala pillow-heif: pip install pillow-heif"
                                             print(error_msg)
-                                            raise Exception(error_msg)
+                                            flash(error_msg, 'error')
+                                            continue
                                         except Exception as heif_error:
                                             error_msg = f"ERROR: No se pudo registrar soporte HEIC: {heif_error}"
                                             print(error_msg)
-                                            raise Exception(error_msg)
+                                            flash(error_msg, 'error')
+                                            continue
                                     
                                     # Abrir imagen con PIL - soporta múltiples formatos
                                     from io import BytesIO
                                     img = None
                                     
-                                    # Intentar abrir la imagen
+                                    # Intentar abrir la imagen con múltiples métodos
                                     try:
                                         img = PILImage.open(BytesIO(file_data))
-                                        print(f"DEBUG: Imagen abierta - Formato: {img.format}, Modo: {img.mode}, Tamaño: {img.size}")
+                                        print(f"DEBUG: ✅ Imagen abierta - Formato: {img.format}, Modo: {img.mode}, Tamaño: {img.size}")
+                                    except PILImage.UnidentifiedImageError as open_error:
+                                        error_msg = f"ERROR: No se pudo identificar el formato de la imagen '{archivo.filename}'. Asegúrate de que sea una imagen válida."
+                                        print(error_msg)
+                                        flash(error_msg, 'error')
+                                        continue
                                     except Exception as open_error:
                                         # Si falla y es HEIC, dar mensaje más específico
                                         if file_extension in ['.heic', '.heif']:
-                                            error_msg = f"ERROR: No se pudo abrir imagen HEIC '{archivo.filename}'. Asegúrate de que pillow-heif esté instalado: pip install pillow-heif"
+                                            error_msg = f"ERROR: No se pudo abrir imagen HEIC '{archivo.filename}'. Verifica que pillow-heif esté instalado correctamente."
                                             print(error_msg)
-                                            raise Exception(error_msg)
+                                            flash(error_msg, 'error')
+                                            continue
                                         else:
-                                            error_msg = f"ERROR: No se pudo abrir imagen '{archivo.filename}': {open_error}"
+                                            error_msg = f"ERROR: No se pudo abrir imagen '{archivo.filename}': {str(open_error)}"
                                             print(error_msg)
-                                            raise Exception(error_msg)
+                                            flash(error_msg, 'error')
+                                            continue
                                     
                                     if img is None:
                                         raise Exception("No se pudo abrir la imagen")

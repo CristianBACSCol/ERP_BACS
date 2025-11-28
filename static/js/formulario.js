@@ -434,29 +434,40 @@ function inicializarPreviewsFotos() {
                                         attempts++;
                                     }
                                     
+                                    // Si heic2any no está disponible, dejar que el backend procese el HEIC
                                     if (!heicConverter) {
-                                        const errorMsg = 'La biblioteca de conversión HEIC no está disponible. Por favor, recarga la página e intenta de nuevo.';
-                                        console.error('❌ ERROR:', errorMsg);
-                                        alert(errorMsg);
-                                        throw new Error(errorMsg);
+                                        console.warn('⚠️ ADVERTENCIA: heic2any no disponible en cliente. El backend procesará el archivo HEIC automáticamente.');
+                                        updateLoadingMsg(`El backend procesará el archivo HEIC: ${file.name}...`);
+                                        // Usar el archivo original - el backend lo convertirá y optimizará
+                                        optimizedFiles.push(file);
+                                        continue;
                                     }
                                     
+                                    // Intentar convertir, pero no bloquear si falla
+                                    let conversionSuccess = false;
                                     try {
                                         fileToOptimize = await convertirHEIC(file);
                                         
                                         // Verificar que la conversión fue exitosa
-                                        if (!fileToOptimize || fileToOptimize.type !== 'image/jpeg') {
-                                            throw new Error('La conversión HEIC no produjo un archivo JPEG válido');
+                                        if (fileToOptimize && fileToOptimize.type === 'image/jpeg') {
+                                            const convertedSize = (fileToOptimize.size / 1024 / 1024).toFixed(2);
+                                            console.log(`DEBUG: ✅ HEIC convertido exitosamente en cliente - Tamaño convertido: ${convertedSize} MB`);
+                                            updateLoadingMsg(`Optimizando imagen convertida (${convertedSize} MB)...`);
+                                            conversionSuccess = true;
                                         }
-                                        
-                                        const convertedSize = (fileToOptimize.size / 1024 / 1024).toFixed(2);
-                                        console.log(`DEBUG: ✅ HEIC convertido exitosamente - Tamaño convertido: ${convertedSize} MB`);
-                                        updateLoadingMsg(`Optimizando imagen convertida (${convertedSize} MB)...`);
                                     } catch (heicError) {
-                                        console.error('❌ Error convirtiendo HEIC:', heicError);
-                                        const errorMsg = `No se pudo convertir el archivo HEIC: ${heicError.message}. Por favor, convierte la imagen a JPEG antes de subirla o recarga la página.`;
-                                        alert(errorMsg);
-                                        throw new Error(errorMsg);
+                                        console.warn('⚠️ ADVERTENCIA: No se pudo convertir HEIC en cliente:', heicError.message);
+                                        console.log('DEBUG: El backend procesará y convertirá el archivo HEIC automáticamente');
+                                        updateLoadingMsg(`El backend procesará el archivo HEIC: ${file.name}...`);
+                                        // Continuar con el archivo original - el backend lo procesará
+                                        optimizedFiles.push(file);
+                                        continue;
+                                    }
+                                    
+                                    // Solo continuar con optimización si la conversión fue exitosa
+                                    if (!conversionSuccess) {
+                                        optimizedFiles.push(file);
+                                        continue;
                                     }
                                 } else {
                                     updateLoadingMsg(`Optimizando: ${file.name}...`);
@@ -465,7 +476,9 @@ function inicializarPreviewsFotos() {
                                 // Verificar que NO sea HEIC antes de optimizar
                                 if (fileToOptimize.name.toLowerCase().endsWith('.heic') || 
                                     fileToOptimize.name.toLowerCase().endsWith('.heif')) {
-                                    throw new Error('ERROR CRÍTICO: El archivo sigue siendo HEIC después de la conversión. No se puede optimizar.');
+                                    console.warn('⚠️ ADVERTENCIA: Archivo sigue siendo HEIC, el backend lo procesará');
+                                    optimizedFiles.push(file);
+                                    continue;
                                 }
                                 
                                 // Optimizar la imagen (ya sea original o convertida)
@@ -482,8 +495,9 @@ function inicializarPreviewsFotos() {
                                 optimizedFiles.push(optimizedFile);
                             } catch (error) {
                                 console.error('Error procesando imagen:', error);
-                                alert('Error al procesar la imagen: ' + error.message);
-                                // No agregar el archivo si falla
+                                // Si falla la optimización en cliente, usar el archivo original y dejar que el backend lo procese
+                                console.log('DEBUG: Fallo en optimización cliente, el backend procesará el archivo');
+                                optimizedFiles.push(file);
                             }
                         } else {
                             optimizedFiles.push(file);
