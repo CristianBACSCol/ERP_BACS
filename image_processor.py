@@ -64,6 +64,23 @@ def process_image(file_data, filename=None, max_size=MAX_FILE_SIZE):
     if not file_data:
         raise ValueError("file_data no puede estar vacío")
     
+    original_size = len(file_data)
+    
+    # OPTIMIZACIÓN: Si el archivo ya es pequeño y es JPEG, devolverlo sin procesar
+    if original_size <= max_size:
+        file_extension = os.path.splitext(filename)[1].lower() if filename else ''
+        # Si ya es JPEG y está dentro del límite, devolverlo tal cual
+        if file_extension in ['.jpg', '.jpeg']:
+            info = {
+                'original_size': original_size,
+                'original_format': file_extension or 'unknown',
+                'optimized_size': original_size,
+                'quality_used': 'N/A (sin procesar)',
+                'format': 'JPEG',
+                'skipped': True
+            }
+            return file_data, info
+    
     # Detectar formato por extensión
     file_extension = os.path.splitext(filename)[1].lower() if filename else ''
     is_heic = file_extension in ['.heic', '.heif']
@@ -75,7 +92,6 @@ def process_image(file_data, filename=None, max_size=MAX_FILE_SIZE):
             "Instala con: pip install pillow-heif"
         )
     
-    original_size = len(file_data)
     info = {
         'original_size': original_size,
         'original_format': file_extension or 'unknown',
@@ -131,11 +147,23 @@ def process_image(file_data, filename=None, max_size=MAX_FILE_SIZE):
         info['resized'] = True
         info['new_dimensions'] = img.size
     
-    # Optimizar con compresión adaptativa
+    # OPTIMIZACIÓN: Si la imagen ya es pequeña, saltar procesamiento pesado
+    # Estimar tamaño aproximado antes de comprimir
+    estimated_size = (width * height * 3) / 1000000  # MB aproximado (RGB)
+    
+    # Si la imagen ya está redimensionada y es pequeña, usar calidad inicial más baja
+    if needs_resize and estimated_size < 2.0:  # Menos de 2MB estimado
+        quality_start = 70  # Empezar con calidad más baja para ahorrar tiempo
+    else:
+        quality_start = QUALITY_START
+    
+    # Optimizar con compresión adaptativa - usar menos iteraciones para ser más rápido
     img_buffer = BytesIO()
-    quality = QUALITY_START
+    quality = quality_start
     optimized_size = 0
-    quality_levels = [85, 80, 75, 70, 65, 60, 55, 50, 45, 40, 35, 30, 25, 20]
+    
+    # Usar menos niveles de calidad para ser más rápido (búsqueda binaria aproximada)
+    quality_levels = [quality_start, 60, 50, 40, 30, 25, 20] if quality_start >= 60 else [quality_start, 50, 40, 30, 25, 20]
     
     for q in quality_levels:
         img_buffer.seek(0)
@@ -146,7 +174,7 @@ def process_image(file_data, filename=None, max_size=MAX_FILE_SIZE):
             format='JPEG',
             quality=q,
             optimize=True,
-            progressive=True
+            progressive=False  # Desactivar progressive para ser más rápido
         )
         
         optimized_size = len(img_buffer.getvalue())
@@ -159,21 +187,20 @@ def process_image(file_data, filename=None, max_size=MAX_FILE_SIZE):
     
     # Si aún es muy grande, redimensionar más agresivamente
     if optimized_size > max_size:
-        print(f"DEBUG: Archivo aún muy grande ({optimized_size / 1024:.1f} KB), redimensionando más agresivamente...")
-        
-        if width > MAX_DIMENSION_AGGRESSIVE or height > MAX_DIMENSION_AGGRESSIVE:
-            if width > height:
+        current_width, current_height = img.size
+        if current_width > MAX_DIMENSION_AGGRESSIVE or current_height > MAX_DIMENSION_AGGRESSIVE:
+            if current_width > current_height:
                 new_width = MAX_DIMENSION_AGGRESSIVE
-                new_height = int(height * (MAX_DIMENSION_AGGRESSIVE / width))
+                new_height = int(current_height * (MAX_DIMENSION_AGGRESSIVE / current_width))
             else:
                 new_height = MAX_DIMENSION_AGGRESSIVE
-                new_width = int(width * (MAX_DIMENSION_AGGRESSIVE / height))
+                new_width = int(current_width * (MAX_DIMENSION_AGGRESSIVE / current_height))
             img = img.resize((new_width, new_height), PILImage.Resampling.LANCZOS)
             info['aggressive_resize'] = True
             info['final_dimensions'] = img.size
         
-        # Intentar de nuevo con calidades más bajas
-        for q in [40, 35, 30, 25, 20]:
+        # Intentar de nuevo con calidades más bajas (menos iteraciones)
+        for q in [35, 25, 20]:
             img_buffer.seek(0)
             img_buffer.truncate(0)
             img.save(
@@ -181,7 +208,7 @@ def process_image(file_data, filename=None, max_size=MAX_FILE_SIZE):
                 format='JPEG',
                 quality=q,
                 optimize=True,
-                progressive=True
+                progressive=False
             )
             optimized_size = len(img_buffer.getvalue())
             if optimized_size <= max_size:
