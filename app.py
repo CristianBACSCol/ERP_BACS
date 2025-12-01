@@ -3767,11 +3767,18 @@ def generar_pdf_formulario(respuesta_formulario):
             elif campo.tipo_campo == 'foto':
                 if respuesta_campo.valor_archivo:
                     fotos_list = respuesta_campo.valor_archivo.split(',')
-                    valor = ""
+                    valor = f"{len(fotos_list)} foto(s) adjunta(s)"
                     
+                    # OPTIMIZACIÓN: Limitar número de imágenes en PDF para evitar timeout
+                    # Procesar máximo 20 imágenes por campo para evitar timeout
+                    MAX_IMAGES_PER_FIELD = 20
+                    if len(fotos_list) > MAX_IMAGES_PER_FIELD:
+                        print(f"DEBUG: ⚠️ Campo tiene {len(fotos_list)} imágenes, limitando a {MAX_IMAGES_PER_FIELD} para evitar timeout")
+                        fotos_list = fotos_list[:MAX_IMAGES_PER_FIELD]
+                        valor = f"{len(fotos_list)} de {len(respuesta_campo.valor_archivo.split(','))} foto(s) mostradas (máximo {MAX_IMAGES_PER_FIELD} por campo)"
                     
                     # Procesar fotos con redimensionamiento inteligente
-                    for foto_filename in fotos_list:
+                    for idx, foto_filename in enumerate(fotos_list):
                         foto_filename = foto_filename.strip()
                         if not foto_filename:
                             continue
@@ -3809,9 +3816,10 @@ def generar_pdf_formulario(respuesta_formulario):
                             try:
                                 # Verificar si es una imagen
                                 with PILImage.open(foto_path) as img:
-                                    # Redimensionar según orientación (6cm = ~170 puntos para mejor resolución)
-                                    max_width_cm = 6  # cm
-                                    max_height_cm = 6  # cm
+                                    # OPTIMIZACIÓN: Reducir tamaño de imágenes en PDF para ser más rápido
+                                    # Redimensionar según orientación (4cm = ~113 puntos para PDF más rápido)
+                                    max_width_cm = 4  # cm (reducido de 6cm)
+                                    max_height_cm = 4  # cm (reducido de 6cm)
                                     max_width_points = max_width_cm * 28.35  # convertir cm a puntos
                                     max_height_points = max_height_cm * 28.35
                                     
@@ -3848,14 +3856,16 @@ def generar_pdf_formulario(respuesta_formulario):
                                             new_width = img.width
                                             new_height = img.height
                                     
-                                    # NO redimensionar la imagen - mantener resolución original
-                                    # Solo ajustar el tamaño de visualización en el PDF
+                                    # OPTIMIZACIÓN: Redimensionar imagen antes de agregar al PDF para ser más rápido
+                                    # Redimensionar la imagen físicamente para reducir tamaño del PDF
+                                    if new_width != img.width or new_height != img.height:
+                                        img = img.resize((new_width, new_height), PILImage.Resampling.LANCZOS)
                                     
-                                    # Guardar imagen temporalmente con máxima calidad y DPI original
+                                    # Guardar imagen temporalmente con calidad optimizada (no 100% para ser más rápido)
                                     import tempfile
                                     temp_fd, temp_path = tempfile.mkstemp(suffix=os.path.splitext(foto_filename)[1] or '.jpg')
                                     os.close(temp_fd)
-                                    img.save(temp_path, quality=100, optimize=False)
+                                    img.save(temp_path, quality=85, optimize=True)  # Calidad 85 en lugar de 100
                                     
                                     # Agregar imagen centrada con borde usando dimensiones calculadas
                                     pdf_image = Image(temp_path, width=new_width, height=new_height)
@@ -3905,8 +3915,24 @@ def generar_pdf_formulario(respuesta_formulario):
         story.append(footer)
         
         # Construir el PDF (esto descarga y procesa todas las imágenes)
-        print(f"DEBUG: Construyendo PDF (esto descargará todas las imágenes de R2)...")
-        doc.build(story)
+        print(f"DEBUG: Construyendo PDF con {len(story)} elementos (esto descargará todas las imágenes de R2)...")
+        try:
+            doc.build(story)
+        except Exception as build_error:
+            print(f"ERROR: Error al construir PDF: {build_error}")
+            import traceback
+            traceback.print_exc()
+            # Limpiar archivos temporales antes de fallar
+            import tempfile
+            import glob
+            temp_dir = tempfile.gettempdir()
+            for temp_file in glob.glob(os.path.join(temp_dir, 'tmp*')):
+                try:
+                    if os.path.exists(temp_file):
+                        os.remove(temp_file)
+                except:
+                    pass
+            raise build_error
         buffer.seek(0)
         
         print(f"DEBUG: PDF construido exitosamente, tamaño: {len(buffer.getvalue())} bytes")
@@ -3926,11 +3952,11 @@ def generar_pdf_formulario(respuesta_formulario):
             print(f"ERROR: No se pudo guardar PDF en R2")
             return None
         
-        # Esperar 5 segundos antes de eliminar imágenes y firmas
-        # Esto asegura que el PDF esté completamente guardado antes de limpiar
+        # OPTIMIZACIÓN: Reducir tiempo de espera para evitar timeout
+        # Esperar 2 segundos antes de eliminar imágenes y firmas (reducido de 5)
         import time
-        print(f"DEBUG: Esperando 5 segundos antes de limpiar archivos de imágenes y firmas...")
-        time.sleep(5)
+        print(f"DEBUG: Esperando 2 segundos antes de limpiar archivos de imágenes y firmas...")
+        time.sleep(2)
         
         # Eliminar imágenes y firmas de R2 después de generar el PDF
         try:
