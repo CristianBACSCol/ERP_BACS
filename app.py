@@ -1,17 +1,17 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_file, abort, make_response
-from flask_sqlalchemy import SQLAlchemy
-from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
-from werkzeug.security import generate_password_hash, check_password_hash
-from werkzeug.utils import secure_filename
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_file, abort, make_response  # type: ignore
+from flask_sqlalchemy import SQLAlchemy  # type: ignore
+from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user  # type: ignore
+from werkzeug.security import generate_password_hash, check_password_hash  # type: ignore
+from werkzeug.utils import secure_filename  # type: ignore
 from datetime import datetime
 import os
 import csv
 import json
-from reportlab.lib.pagesizes import letter
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib import colors
-from PIL import Image as PILImage
+from reportlab.lib.pagesizes import letter  # type: ignore
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image  # type: ignore
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle  # type: ignore
+from reportlab.lib import colors  # type: ignore
+from PIL import Image as PILImage  # type: ignore
 import io
 
 from config import Config
@@ -20,7 +20,7 @@ from image_processor import process_image, is_image_allowed
 
 # Registrar soporte para HEIC/HEIF al inicio de la aplicación
 try:
-    from pillow_heif import register_heif_opener
+    from pillow_heif import register_heif_opener  # type: ignore
     register_heif_opener()
     print("DEBUG: Soporte HEIC/HEIF registrado exitosamente")
 except ImportError:
@@ -44,15 +44,6 @@ def from_json(json_string):
 
 # Inicializar extensiones
 db = SQLAlchemy(app)
-
-# Configurar pool de conexiones para entornos serverless (Vercel)
-if hasattr(Config, 'SQLALCHEMY_ENGINE_OPTIONS'):
-    try:
-        from sqlalchemy import create_engine
-        engine = create_engine(app.config['SQLALCHEMY_DATABASE_URI'], **app.config['SQLALCHEMY_ENGINE_OPTIONS'])
-        db.engine = engine
-    except Exception as e:
-        print(f"Warning: No se pudo configurar pool de conexiones: {e}")
 
 login_manager = LoginManager()
 login_manager.init_app(app)
@@ -287,7 +278,7 @@ def obtener_logo_pdf(max_width=100, max_height=50):
     if os.path.exists(logo_path):
         try:
             # Obtener dimensiones reales de la imagen
-            from PIL import Image as PILImage
+            from PIL import Image as PILImage  # type: ignore  # type: ignore
             with PILImage.open(logo_path) as img:
                 original_width, original_height = img.size
             
@@ -1136,7 +1127,7 @@ def generar_pdf_profesional(incidencias, agrupacion='estado'):
     buffer = io.BytesIO()
     
     # Configuración de página A4
-    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.pagesizes import A4  # type: ignore
     doc = SimpleDocTemplate(buffer, pagesize=A4, 
                           leftMargin=50, rightMargin=50,
                           topMargin=50, bottomMargin=50)
@@ -1393,7 +1384,7 @@ def generar_pdf_multipagina_profesional(incidencias, agrupacion='estado'):
     buffer = io.BytesIO()
     
     # Configuración de página A4
-    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.pagesizes import A4  # type: ignore
     doc = SimpleDocTemplate(buffer, pagesize=A4, 
                           leftMargin=40, rightMargin=40,
                           topMargin=40, bottomMargin=40)
@@ -1645,7 +1636,7 @@ def generar_pdf_informe_estructurado(incidencias, datos_informe):
     buffer = io.BytesIO()
     
     # Configuración de página A4
-    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.pagesizes import A4  # type: ignore
     doc = SimpleDocTemplate(buffer, pagesize=A4, 
                           leftMargin=40, rightMargin=40,
                           topMargin=40, bottomMargin=40)
@@ -1852,7 +1843,7 @@ def crear_collage_imagenes(imagenes_paths, titulo_collage):
     El collage resultante será cuadrado (1:1) combinando todas las imágenes
     """
     try:
-        from PIL import Image as PILImage
+        from PIL import Image as PILImage  # type: ignore
         
         # Abrir todas las imágenes
         imagenes = []
@@ -1966,7 +1957,7 @@ def generar_pdf_informe_html_format(incidencias, datos_informe):
     buffer = io.BytesIO()
     
     # Configuración de página A4 con márgenes similares al HTML (40px = ~1.4cm)
-    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.pagesizes import A4  # type: ignore
     doc = SimpleDocTemplate(buffer, pagesize=A4, 
                           leftMargin=40, rightMargin=40,
                           topMargin=40, bottomMargin=40)
@@ -2261,12 +2252,33 @@ def init_db():
         try:
             print("🔧 Inicializando base de datos...")
             
+            # Debug: mostrar información de conexión (sin contraseña)
+            db_uri = app.config.get('SQLALCHEMY_DATABASE_URI', '')
+            if db_uri:
+                # Ocultar contraseña en el log
+                if '@' in db_uri:
+                    parts = db_uri.split('@')
+                    if ':' in parts[0]:
+                        user_pass = parts[0].split('://')[1] if '://' in parts[0] else parts[0]
+                        if ':' in user_pass:
+                            user = user_pass.split(':')[0]
+                            db_uri_safe = db_uri.replace(user_pass, f"{user}:***")
+                        else:
+                            db_uri_safe = db_uri
+                    else:
+                        db_uri_safe = db_uri
+                else:
+                    db_uri_safe = db_uri
+                print(f"   Conectando a: {db_uri_safe}")
+            
             # Solo crear las tablas básicas
             db.create_all()
             print("✅ Tablas creadas correctamente")
             
         except Exception as e:
             print(f"Error inicializando base de datos: {e}")
+            import traceback
+            traceback.print_exc()
             db.session.rollback()
 
 # ==================== GESTIÓN DE ÍNDICES ====================
@@ -2667,7 +2679,7 @@ def diligenciar_formulario(id):
                             # Guardar PNG EXACTAMENTE como en FirmasHTML y almacenar SOLO la ruta
                             import base64
                             from io import BytesIO
-                            from PIL import Image as PILImage
+                            from PIL import Image as PILImage  # type: ignore  # type: ignore
 
                             # Separar prefijo data URL
                             if ',' in firma_data:
@@ -2706,12 +2718,36 @@ def diligenciar_formulario(id):
                             # Como fallback guarda el base64 para no perder datos
                             respuesta_campo.valor_archivo = firma_data
 
-                        # Guardar información adicional del firmante
-                        respuesta_campo.nombre_firmante = request.form.get(f'nombre_{campo.id}', '')
-                        respuesta_campo.documento_firmante = request.form.get(f'documento_{campo.id}', '')
-                        respuesta_campo.telefono_firmante = request.form.get(f'telefono_{campo.id}', '')
-                        respuesta_campo.empresa_firmante = request.form.get(f'empresa_{campo.id}', '')
-                        respuesta_campo.cargo_firmante = request.form.get(f'cargo_{campo.id}', '')
+                        # Guardar información adicional del firmante con validación
+                        respuesta_campo.nombre_firmante = request.form.get(f'nombre_{campo.id}', '').strip()
+                        
+                        # Validar documento (solo números)
+                        documento = request.form.get(f'documento_{campo.id}', '').strip()
+                        if documento:
+                            import re
+                            # Remover espacios y caracteres no numéricos
+                            documento_limpio = re.sub(r'[^\d]', '', documento)
+                            if not documento_limpio.isdigit():
+                                raise ValueError(f"El documento de identidad solo puede contener números")
+                            respuesta_campo.documento_firmante = documento_limpio
+                        else:
+                            respuesta_campo.documento_firmante = ''
+                        
+                        # Validar teléfono (solo números, espacios, +, -)
+                        telefono = request.form.get(f'telefono_{campo.id}', '').strip()
+                        if telefono:
+                            import re
+                            # Permitir números, espacios, +, -, paréntesis
+                            if not re.match(r'^[\d\s\+\-\(\)]+$', telefono):
+                                raise ValueError(f"El teléfono solo puede contener números, espacios, +, - y paréntesis")
+                            # Remover espacios para almacenar
+                            telefono_limpio = re.sub(r'\s+', '', telefono)
+                            respuesta_campo.telefono_firmante = telefono_limpio
+                        else:
+                            respuesta_campo.telefono_firmante = ''
+                        
+                        respuesta_campo.empresa_firmante = request.form.get(f'empresa_{campo.id}', '').strip()
+                        respuesta_campo.cargo_firmante = request.form.get(f'cargo_{campo.id}', '').strip()
                 elif campo.tipo_campo == 'foto':
                     # Procesar fotos múltiples con renombrado automático
                     archivos = request.files.getlist(f'campo_{campo.id}')
@@ -2890,7 +2926,16 @@ def diligenciar_formulario(id):
     if formulario.descripcion and len(formulario.descripcion) > 1000:
         formulario.descripcion = formulario.descripcion[:1000] + '...'
     
-    return render_template('diligenciar_formulario.html', formulario=formulario)
+    # Cargar clientes y sedes para campos dinámicos (como "Mallplaza")
+    # Cargar clientes con sus sedes relacionadas
+    clientes = Cliente.query.filter_by(activo=True).all()
+    # Cargar todas las sedes activas
+    sedes = Sede.query.filter_by(activo=True).order_by(Sede.nombre).all()
+    
+    return render_template('diligenciar_formulario.html', 
+                          formulario=formulario, 
+                          clientes=clientes, 
+                          sedes=sedes)
 
 @app.route('/formularios/<int:id>/descargar-pdf')
 @login_required
@@ -2957,7 +3002,7 @@ def descargar_formulario_pdf_file(id):
         return response
     
     from functools import wraps
-    from flask import after_this_request
+    from flask import after_this_request  # type: ignore
     
     @after_this_request
     def cleanup(response):
@@ -3063,7 +3108,7 @@ def generar_pdf_simple(respuesta_formulario):
         
         buffer = io.BytesIO()
         
-        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.pagesizes import A4  # type: ignore  # type: ignore
         # Márgenes APA Colombia (aprox.): 2.54 cm = 72 * 1 inch = ~72 puntos
         apa_margin = 72  # 1 inch
         doc = SimpleDocTemplate(
@@ -3080,8 +3125,8 @@ def generar_pdf_simple(respuesta_formulario):
         
         # Registrar Calibri si está disponible; fallback a Helvetica
         try:
-            from reportlab.pdfbase import pdfmetrics
-            from reportlab.pdfbase.ttfonts import TTFont
+            from reportlab.pdfbase import pdfmetrics  # type: ignore
+            from reportlab.pdfbase.ttfonts import TTFont  # type: ignore
             import os
             calibri_paths = [
                 r"C:\\Windows\\Fonts\\calibri.ttf",
@@ -3162,7 +3207,7 @@ def generar_pdf_simple(respuesta_formulario):
             desc = getattr(respuesta_formulario.formulario, 'descripcion', '') or ''
             if isinstance(desc, str) and desc.strip():
                 desc_html = escape(desc).replace('\n', '<br/>')
-                from reportlab.lib.styles import ParagraphStyle
+                from reportlab.lib.styles import ParagraphStyle  # type: ignore
                 desc_style = ParagraphStyle(
                     name='DescStyle',
                     parent=styles['Normal'],
@@ -3446,7 +3491,7 @@ def procesar_firma_con_metodos_alternativos(firma_bytes, temp_path):
     """Intentar procesar firma con métodos alternativos para imágenes truncadas"""
     try:
         # Método 1: Usar PIL con configuración para imágenes truncadas
-        from PIL import ImageFile
+        from PIL import ImageFile  # type: ignore
         ImageFile.LOAD_TRUNCATED_IMAGES = True
         
         img = PILImage.open(io.BytesIO(firma_bytes))
@@ -3506,7 +3551,7 @@ def procesar_firma_con_metodos_alternativos(firma_bytes, temp_path):
             placeholder = PILImage.new('RGB', (400, 200), color='white')
             
             # Agregar texto indicando que es una firma
-            from PIL import ImageDraw, ImageFont
+            from PIL import ImageDraw, ImageFont  # type: ignore
             draw = ImageDraw.Draw(placeholder)
             
             # Intentar usar una fuente, si no está disponible usar la por defecto
@@ -3540,7 +3585,7 @@ def generar_pdf_formulario(respuesta_formulario):
         print(f"DEBUG: Iniciando generación de PDF para formulario {respuesta_formulario.formulario.nombre}")
         buffer = io.BytesIO()
         
-        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.pagesizes import A4  # type: ignore  # type: ignore
         doc = SimpleDocTemplate(buffer, pagesize=A4, 
                               leftMargin=40, rightMargin=40,
                               topMargin=40, bottomMargin=40)
@@ -3550,8 +3595,8 @@ def generar_pdf_formulario(respuesta_formulario):
         
         # Registrar Calibri si está disponible; de lo contrario, usar Helvetica
         try:
-            from reportlab.pdfbase import pdfmetrics
-            from reportlab.pdfbase.ttfonts import TTFont
+            from reportlab.pdfbase import pdfmetrics  # type: ignore
+            from reportlab.pdfbase.ttfonts import TTFont  # type: ignore
             import os
             # Intentos comunes de ruta para Windows
             calibri_paths = [
@@ -3826,7 +3871,7 @@ def generar_pdf_formulario(respuesta_formulario):
                             raise Exception(error_msg)
 
                         # Crear imagen escalada de firma
-                        from reportlab.lib.pagesizes import A4
+                        from reportlab.lib.pagesizes import A4  # type: ignore  # type: ignore  # type: ignore
                         img_tmp = PILImage.open(png_path)
                         img_w, img_h = img_tmp.size
                         page_w, _ = A4
@@ -4124,15 +4169,15 @@ def procesar_firma_imagen(firma_data, campo, story, value_style):
         import base64
         import datetime
         import io
-        from PIL import Image as PILImage
-        from reportlab.platypus import Image
-        from reportlab.lib.utils import ImageReader
+        from PIL import Image as PILImage  # type: ignore
+        from reportlab.platypus import Image  # type: ignore
+        from reportlab.lib.utils import ImageReader  # type: ignore
         
         print(f"DEBUG: Procesando imagen de firma para campo {campo.id}")
         print(f"DEBUG: Longitud de datos base64: {len(firma_data)}")
         
         # Configurar PIL para manejar imágenes truncadas
-        from PIL import ImageFile
+        from PIL import ImageFile  # type: ignore
         ImageFile.LOAD_TRUNCATED_IMAGES = True
         
         # Extraer datos base64
@@ -4218,7 +4263,7 @@ def procesar_firma_imagen(firma_data, campo, story, value_style):
             else:  # Caso intermedio
                 print(f"DEBUG: Caso intermedio, aplicando contraste")
                 # Aumentar contraste
-                from PIL import ImageEnhance
+                from PIL import ImageEnhance  # type: ignore
                 enhancer = ImageEnhance.Contrast(img)
                 img_resized = enhancer.enhance(2.0)
             
@@ -4304,7 +4349,7 @@ def procesar_firma_imagen(firma_data, campo, story, value_style):
                 try:
                     print(f"DEBUG: Creando imagen de respaldo")
                     simple_img = PILImage.new('RGB', (400, 200), (255, 255, 255))
-                    from PIL import ImageDraw
+                    from PIL import ImageDraw  # type: ignore
                     draw = ImageDraw.Draw(simple_img)
                     
                     # Dibujar un rectángulo más grande
@@ -4394,10 +4439,10 @@ def procesar_firma_simple(firma_data, campo, story, value_style):
         import datetime
         import io
         import re
-        from PIL import Image as PILImage
-        from PIL import ImageFile
-        from reportlab.platypus import Image
-        from reportlab.lib.utils import ImageReader
+        from PIL import Image as PILImage  # type: ignore
+        from PIL import ImageFile  # type: ignore
+        from reportlab.platypus import Image  # type: ignore
+        from reportlab.lib.utils import ImageReader  # type: ignore
         
         # Configurar PIL para manejar imágenes truncadas
         ImageFile.LOAD_TRUNCATED_IMAGES = True
@@ -4461,7 +4506,7 @@ def procesar_firma_simple(firma_data, campo, story, value_style):
                 print(f"DEBUG: Imagen parece estar vacía, creando imagen de respaldo")
                 # Crear imagen de respaldo
                 image = PILImage.new('RGB', (400, 200), (255, 255, 255))
-                from PIL import ImageDraw, ImageFont
+                from PIL import ImageDraw, ImageFont  # type: ignore
                 
                 try:
                     draw = ImageDraw.Draw(image)
@@ -4558,9 +4603,9 @@ def procesar_firma_png(firma_data, campo, story, value_style):
         
         import base64
         from datetime import datetime
-        from PIL import Image as PILImage
+        from PIL import Image as PILImage  # type: ignore
         from io import BytesIO
-        from reportlab.platypus import Image, Spacer, Paragraph
+        from reportlab.platypus import Image, Spacer, Paragraph  # type: ignore
         
         # Si firma_data es una ruta (cuando la guardamos en POST), úsala directamente
         posible_path = os.path.join(app.config['UPLOAD_FOLDER'], firma_data) if not os.path.isabs(firma_data) else firma_data
@@ -4612,7 +4657,7 @@ def procesar_firma_png(firma_data, campo, story, value_style):
         
         # Escalar la firma (EXACTO como FirmasHTML)
         img_w, img_h = bg.size
-        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.pagesizes import A4  # type: ignore  # type: ignore
         page_w, page_h = A4
         max_width = min(page_w * 0.4, 300)
         scale = max_width / img_w

@@ -1,5 +1,5 @@
 import os
-from dotenv import load_dotenv
+from dotenv import load_dotenv  # type: ignore
 from urllib.parse import quote_plus
 
 load_dotenv()
@@ -8,17 +8,17 @@ class Config:
     SECRET_KEY = os.environ.get('SECRET_KEY') or 'tu_clave_secreta_muy_segura_aqui_2024'
     
     # Configuración de base de datos - Soporta MySQL (local) y PostgreSQL (Supabase)
-    DB_HOST = os.environ.get('DB_HOST', 'localhost')
-    DB_PORT = os.environ.get('DB_PORT', '3306')
-    DB_USER = os.environ.get('DB_USER', 'root')
-    DB_PASSWORD = os.environ.get('DB_PASSWORD', '')
-    DB_NAME = os.environ.get('DB_NAME', 'erp_bacs')
+    DB_HOST = os.environ.get('DB_HOST', 'localhost').strip()
+    DB_PORT = os.environ.get('DB_PORT', '3306').strip()
+    DB_USER = os.environ.get('DB_USER', 'root').strip()
+    DB_PASSWORD = os.environ.get('DB_PASSWORD', '').strip()  # Limpiar espacios en blanco
+    DB_NAME = os.environ.get('DB_NAME', 'erp_bacs').strip()
     
     # Detectar si se usa Supabase (PostgreSQL) o MySQL
     # Si hay una URL de Supabase o el puerto es 5432/6543 (PostgreSQL), usar PostgreSQL
-    SUPABASE_DB_URL = os.environ.get('SUPABASE_DB_URL')
+    SUPABASE_DB_URL_ENV = os.environ.get('SUPABASE_DB_URL', '').strip() if os.environ.get('SUPABASE_DB_URL') else None
     USE_POSTGRESQL = (
-        SUPABASE_DB_URL is not None or 
+        (SUPABASE_DB_URL_ENV is not None and SUPABASE_DB_URL_ENV) or 
         DB_PORT in ['5432', '6543'] or
         'supabase' in DB_HOST.lower() or
         'postgres' in DB_NAME.lower()
@@ -26,29 +26,36 @@ class Config:
     
     if USE_POSTGRESQL:
         # Usar PostgreSQL (Supabase)
-        if SUPABASE_DB_URL:
-            SQLALCHEMY_DATABASE_URI = SUPABASE_DB_URL
-        else:
-            # Construir URL de PostgreSQL con caracteres especiales escapados
+        # Priorizar variables individuales sobre SUPABASE_DB_URL para mayor control y escape correcto
+        if DB_HOST and DB_USER and DB_PASSWORD and DB_PORT and DB_NAME:
+            # Construir URL desde variables individuales con contraseña escapada correctamente
+            # Esto es más confiable que usar SUPABASE_DB_URL que puede tener placeholders o escape incorrecto
+            
+            # Escapar la contraseña correctamente (quote_plus convierte * a %2A, espacios a +, etc.)
             escaped_password = quote_plus(DB_PASSWORD)
             SQLALCHEMY_DATABASE_URI = f"postgresql://{DB_USER}:{escaped_password}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+            
+            # Debug: mostrar información (solo en desarrollo)
+            if os.environ.get('FLASK_ENV') == 'development' or os.environ.get('FLASK_DEBUG') == 'True':
+                print(f"[DEBUG] Construyendo URL de conexión desde variables individuales:")
+                print(f"  Usuario: {DB_USER}")
+                print(f"  Host: {DB_HOST}")
+                print(f"  Puerto: {DB_PORT}")
+                print(f"  Base de datos: {DB_NAME}")
+                print(f"  Contraseña (longitud): {len(DB_PASSWORD)} caracteres")
+                print(f"  Contraseña escapada: {escaped_password}")
+        elif SUPABASE_DB_URL_ENV and not any(placeholder in str(SUPABASE_DB_URL_ENV).upper() for placeholder in ['[YOUR', 'TU_CONTRASEÑA', '[PASSWORD]', 'YOUR_PASSWORD']):
+            # Usar SUPABASE_DB_URL solo si no hay variables individuales y no tiene placeholders
+            # IMPORTANTE: La contraseña en SUPABASE_DB_URL debe estar escapada manualmente
+            # Ejemplo: postgresql://user:BACS.2021%2ACol_@host:port/db (donde %2A es el * escapado)
+            SQLALCHEMY_DATABASE_URI = SUPABASE_DB_URL_ENV
+        else:
+            raise ValueError("DB_PASSWORD o variables de conexión no están configuradas. Configura DB_HOST, DB_USER, DB_PASSWORD, DB_PORT, DB_NAME en tu archivo .env")
     else:
         # Usar MySQL (desarrollo local)
         SQLALCHEMY_DATABASE_URI = f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
     
     SQLALCHEMY_TRACK_MODIFICATIONS = False
-    
-    # Configuración de pool de conexiones para Vercel/serverless
-    # Importante para evitar problemas de conexión en entornos serverless
-    SQLALCHEMY_ENGINE_OPTIONS = {
-        'pool_pre_ping': True,  # Verificar conexiones antes de usarlas
-        'pool_recycle': 300,    # Reciclar conexiones cada 5 minutos
-        'pool_size': 5,         # Tamaño del pool
-        'max_overflow': 10,     # Conexiones adicionales permitidas
-        'connect_args': {
-            'connect_timeout': 10,  # Timeout de conexión de 10 segundos
-        }
-    }
     
     # Configuración de archivos
     UPLOAD_FOLDER = 'uploads'  # Se mantiene para compatibilidad temporal, pero no se usa

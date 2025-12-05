@@ -751,11 +751,21 @@ function validarFormato(valor, tipoValidacion) {
             };
         
         case 'telefono':
-            // Teléfono: solo números, 7-15 dígitos
-            const regexTelefono = /^\d{7,15}$/;
+            // Teléfono: números, espacios, +, -, paréntesis (7-15 dígitos numéricos)
+            const telefonoLimpio = valor.replace(/[\s\+\-\(\)]/g, '');
+            const regexTelefono = /^[\d\s\+\-\(\)]+$/;
+            const tieneDigitos = /^\d{7,15}$/.test(telefonoLimpio);
             return {
-                valido: regexTelefono.test(valor),
-                mensaje: 'El teléfono debe contener solo números (7-15 dígitos)'
+                valido: regexTelefono.test(valor) && tieneDigitos,
+                mensaje: 'El teléfono debe contener solo números, espacios, +, - y paréntesis (7-15 dígitos)'
+            };
+        
+        case 'solo_numeros':
+            // Solo números (sin espacios ni otros caracteres)
+            const regexSoloNumeros = /^\d+$/;
+            return {
+                valido: regexSoloNumeros.test(valor),
+                mensaje: 'Este campo solo acepta números'
             };
         
         case 'email':

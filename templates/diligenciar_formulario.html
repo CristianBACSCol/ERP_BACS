@@ -70,9 +70,17 @@
                         {{ campo.titulo }}{% if campo.obligatorio %} *{% endif %}
                     </label>
                     <select id="campo_{{ campo.id }}" name="campo_{{ campo.id }}" 
-                            class="form-control" {% if campo.obligatorio %}required{% endif %}>
+                            class="form-control" {% if campo.obligatorio %}required{% endif %}
+                            {% if 'mallplaza' in campo.titulo.lower() or 'sede' in campo.titulo.lower() %}data-cargar-sedes="true"{% endif %}>
                         <option value="">Selecciona una opción</option>
-                        {% if campo.configuracion %}
+                        {% if 'mallplaza' in campo.titulo.lower() or 'sede' in campo.titulo.lower() %}
+                            {# Cargar sedes dinámicamente desde la base de datos #}
+                            {% if sedes %}
+                                {% for sede in sedes %}
+                                <option value="{{ sede.nombre }}">{{ sede.nombre }}</option>
+                                {% endfor %}
+                            {% endif %}
+                        {% elif campo.configuracion %}
                             {% set opciones = campo.configuracion|from_json %}
                             {% if opciones.opciones %}
                                 {% for opcion in opciones.opciones %}
@@ -136,7 +144,11 @@
                                     <div class="form-group">
                                         <label for="documento_{{ campo.id }}" class="form-label">Documento de Identidad *</label>
                                         <input type="text" id="documento_{{ campo.id }}" name="documento_{{ campo.id }}" 
-                                               class="form-control" required>
+                                               class="form-control campo-validado" required
+                                               data-tipo-validacion="solo_numeros"
+                                               pattern="[0-9]*"
+                                               inputmode="numeric"
+                                               title="Solo se permiten números">
                                     </div>
                                 </div>
                             </div>
@@ -145,7 +157,10 @@
                                     <div class="form-group">
                                         <label for="telefono_{{ campo.id }}" class="form-label">Teléfono</label>
                                         <input type="tel" id="telefono_{{ campo.id }}" name="telefono_{{ campo.id }}" 
-                                               class="form-control">
+                                               class="form-control campo-validado"
+                                               data-tipo-validacion="telefono"
+                                               pattern="[\d\s\+\-\(\)]+"
+                                               title="Solo se permiten números, espacios, +, - y paréntesis">
                                     </div>
                                 </div>
                                 <div class="col-md-6">
