@@ -2935,17 +2935,17 @@ def diligenciar_formulario(id):
                     flash('Formulario diligenciado y PDF generado exitosamente', 'success')
                     return redirect(url_for('descargar_formulario_pdf', id=respuesta_formulario.id))
                 else:
-                    print("DEBUG: Error al generar PDF (retornó None)")
-                    # No mostrar error al usuario si el formulario se guardó correctamente
-                    # El PDF se puede regenerar después
-                    flash('Formulario diligenciado exitosamente', 'success')
+                    print("DEBUG: Error al generar PDF (retornó None - probablemente R2 no configurado)")
+                    # El PDF se generó pero no se pudo guardar (probablemente R2 no configurado)
+                    # Se regenerará automáticamente cuando se intente descargar
+                    flash('Formulario diligenciado exitosamente. El PDF se generará al descargarlo.', 'success')
                     return redirect(url_for('formularios'))
             except Exception as pdf_error:
                 print(f"ERROR: Excepción al generar PDF: {pdf_error}")
                 import traceback
                 traceback.print_exc()
-                # No mostrar error al usuario si el formulario se guardó correctamente
-                flash('Formulario diligenciado exitosamente', 'success')
+                # El formulario se guardó correctamente, el PDF se puede regenerar después
+                flash('Formulario diligenciado exitosamente. El PDF se generará al descargarlo.', 'success')
                 return redirect(url_for('formularios'))
             
         except Exception as e:
@@ -2996,9 +2996,8 @@ def descargar_formulario_pdf(id):
     formulario_nombre = secure_filename(respuesta_formulario.formulario.nombre)
     r2_path = f'Formularios/{formulario_nombre}/{respuesta_formulario.archivo_pdf}'
     
-    if not file_exists_in_r2(r2_path):
-        flash('El archivo PDF no existe', 'error')
-        return redirect(url_for('formularios'))
+    # No verificar aquí si existe en R2, dejar que la función de descarga lo maneje
+    # (puede regenerar el PDF si no existe)
     
     # Mostrar página de descarga para todos los dispositivos (para poder redirigir)
     return render_template('descargar_pdf_mobile.html', 
@@ -3050,16 +3049,26 @@ def descargar_formulario_pdf_file(id):
                 # Actualizar en la base de datos
                 respuesta_formulario.archivo_pdf = pdf_path
                 db.session.commit()
+                # Actualizar r2_path con el nuevo nombre
+                r2_path = f'Formularios/{formulario_nombre}/{pdf_path}'
                 # Intentar descargar de nuevo
                 if file_exists_in_r2(r2_path):
                     temp_file = download_to_temp_file(r2_path)
+                    print(f"DEBUG: PDF regenerado y descargado exitosamente de R2")
+                else:
+                    print(f"ERROR: PDF regenerado pero no se encuentra en R2: {r2_path}")
+            else:
+                print(f"ERROR: No se pudo generar el PDF (retornó None)")
         except Exception as regen_error:
             print(f"ERROR: No se pudo regenerar el PDF: {regen_error}")
             import traceback
             traceback.print_exc()
     
     if not temp_file:
-        abort(404)
+        # Si aún no se encuentra después de intentar regenerar, mostrar error
+        print(f"ERROR: PDF no disponible después de intentar regenerar")
+        flash('El PDF no está disponible. Por favor, contacta al administrador o verifica la configuración de R2.', 'error')
+        return redirect(url_for('formularios'))
     
     print(f"DEBUG: PDF descargado de R2 temporalmente para servir")
     
@@ -4157,42 +4166,26 @@ def generar_pdf_formulario(respuesta_formulario):
         
         print(f"DEBUG: Guardando PDF en R2: {r2_path}")
         pdf_bytes = buffer.getvalue()
+        
+        # Verificar si R2 está configurado
+        from r2_storage import get_r2_client
+        r2_client = get_r2_client()
+        
+        if r2_client is None:
+            print(f"ERROR: R2 no está configurado. No se puede guardar el PDF.")
+            # En Vercel, no podemos guardar en disco porque es efímero
+            # Retornar None para que se regenere cuando se intente descargar
+            return None
+        
+        # Intentar guardar en R2
         if upload_file_to_r2(pdf_bytes, r2_path, content_type='application/pdf'):
             print(f"DEBUG: PDF generado exitosamente en R2: {documento_nombre}")
             return documento_nombre
         else:
             print(f"ERROR: No se pudo guardar PDF en R2")
-            # Intentar guardar localmente como fallback
-            # En Vercel, usar /tmp que es el único directorio escribible
-            try:
-                import tempfile
-                # Detectar si estamos en Vercel (tiene variable de entorno VERCEL)
-                if os.environ.get('VERCEL'):
-                    # En Vercel, usar /tmp
-                    temp_dir = '/tmp'
-                else:
-                    # En local, usar uploads/r2_storage
-                    temp_dir = os.path.join('uploads', 'r2_storage')
-                
-                # Crear directorio si no existe
-                os.makedirs(temp_dir, exist_ok=True)
-                
-                # Guardar en temp_dir con el nombre del documento
-                local_path = os.path.join(temp_dir, documento_nombre)
-                with open(local_path, 'wb') as f:
-                    f.write(pdf_bytes)
-                print(f"DEBUG: PDF guardado localmente como fallback: {local_path}")
-                # IMPORTANTE: Retornar el nombre del documento incluso si no se guardó en R2
-                # El PDF se generó correctamente, solo no se pudo subir a R2
-                return documento_nombre
-            except Exception as local_error:
-                print(f"ERROR: No se pudo guardar PDF ni localmente: {local_error}")
-                import traceback
-                traceback.print_exc()
-                # Aún así retornar el nombre del documento porque el PDF se generó correctamente
-                # El usuario podrá intentar regenerar el PDF después
-                print(f"WARNING: PDF generado pero no se pudo guardar. Retornando nombre para permitir regeneración.")
-                return documento_nombre
+            # Si R2 está configurado pero falla, retornar None para regenerar después
+            # No guardar en /tmp porque en Vercel es efímero y no estará disponible en otra petición
+            return None
         
         # OPTIMIZACIÓN: Reducir tiempo de espera para evitar timeout
         # Esperar 2 segundos antes de eliminar imágenes y firmas (reducido de 5)
