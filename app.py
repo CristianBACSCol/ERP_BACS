@@ -2930,23 +2930,24 @@ def diligenciar_formulario(id):
                     respuesta_formulario.archivo_pdf = pdf_path
                     db.session.commit()
                     print(f"DEBUG: PDF generado exitosamente: {pdf_path}")
-                    
-                    # Redirigir a página de descarga
                     flash('Formulario diligenciado y PDF generado exitosamente', 'success')
-                    return redirect(url_for('descargar_formulario_pdf', id=respuesta_formulario.id))
                 else:
-                    print("DEBUG: Error al generar PDF (retornó None - probablemente R2 no configurado)")
-                    # El PDF se generó pero no se pudo guardar (probablemente R2 no configurado)
+                    print("DEBUG: PDF no se pudo guardar (probablemente R2 no configurado)")
+                    # No guardar archivo_pdf en la base de datos si no se pudo guardar
                     # Se regenerará automáticamente cuando se intente descargar
                     flash('Formulario diligenciado exitosamente. El PDF se generará al descargarlo.', 'success')
-                    return redirect(url_for('formularios'))
+                
+                # SIEMPRE redirigir a la página de descarga, incluso si el PDF no se guardó
+                # La página de descarga puede regenerar el PDF automáticamente
+                return redirect(url_for('descargar_formulario_pdf', id=respuesta_formulario.id))
             except Exception as pdf_error:
                 print(f"ERROR: Excepción al generar PDF: {pdf_error}")
                 import traceback
                 traceback.print_exc()
                 # El formulario se guardó correctamente, el PDF se puede regenerar después
                 flash('Formulario diligenciado exitosamente. El PDF se generará al descargarlo.', 'success')
-                return redirect(url_for('formularios'))
+                # Redirigir a la página de descarga para que intente regenerar el PDF
+                return redirect(url_for('descargar_formulario_pdf', id=respuesta_formulario.id))
             
         except Exception as e:
             db.session.rollback()
@@ -2988,13 +2989,16 @@ def descargar_formulario_pdf(id):
         flash('No tienes permisos para acceder a este formulario', 'error')
         return redirect(url_for('formularios'))
     
-    if not respuesta_formulario.archivo_pdf:
-        flash('No se encontró el archivo PDF', 'error')
-        return redirect(url_for('formularios'))
+    # Si no hay archivo_pdf, no mostrar error todavía
+    # La función de descarga intentará regenerarlo automáticamente
     
     # Buscar el archivo en R2: Formularios/nombredelformulario/nombredeldocumento.pdf
     formulario_nombre = secure_filename(respuesta_formulario.formulario.nombre)
-    r2_path = f'Formularios/{formulario_nombre}/{respuesta_formulario.archivo_pdf}'
+    # Si no hay archivo_pdf, usar un nombre temporal para la ruta (se regenerará)
+    if respuesta_formulario.archivo_pdf:
+        r2_path = f'Formularios/{formulario_nombre}/{respuesta_formulario.archivo_pdf}'
+    else:
+        r2_path = None
     
     # No verificar aquí si existe en R2, dejar que la función de descarga lo maneje
     # (puede regenerar el PDF si no existe)
@@ -3015,8 +3019,25 @@ def descargar_formulario_pdf_file(id):
     if current_user.rol.nombre not in ['Administrador', 'Coordinador'] and respuesta_formulario.diligenciado_por != current_user.id:
         abort(403)
     
+    # Si no hay archivo_pdf, intentar regenerarlo primero
     if not respuesta_formulario.archivo_pdf:
-        abort(404)
+        print(f"DEBUG: No hay archivo_pdf, intentando regenerar PDF...")
+        try:
+            pdf_path = generar_pdf_formulario(respuesta_formulario)
+            if pdf_path:
+                respuesta_formulario.archivo_pdf = pdf_path
+                db.session.commit()
+                print(f"DEBUG: PDF regenerado exitosamente: {pdf_path}")
+            else:
+                print(f"ERROR: No se pudo regenerar el PDF")
+                flash('No se pudo generar el PDF. Por favor, verifica la configuración de R2.', 'error')
+                return redirect(url_for('formularios'))
+        except Exception as regen_error:
+            print(f"ERROR: Excepción al regenerar PDF: {regen_error}")
+            import traceback
+            traceback.print_exc()
+            flash('No se pudo generar el PDF. Por favor, verifica la configuración de R2.', 'error')
+            return redirect(url_for('formularios'))
     
     # Buscar el archivo en R2: Formularios/nombredelformulario/nombredeldocumento.pdf
     formulario_nombre = secure_filename(respuesta_formulario.formulario.nombre)
