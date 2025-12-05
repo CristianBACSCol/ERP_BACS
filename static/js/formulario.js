@@ -735,9 +735,151 @@ function inicializarSeleccionMultiple() {
     });
 }
 
+// Funciones de validación de formato
+function validarFormato(valor, tipoValidacion) {
+    if (!valor || !tipoValidacion) return { valido: true };
+    
+    valor = valor.trim();
+    
+    switch(tipoValidacion) {
+        case 'cedula':
+            // Cédula: solo números, 7-11 dígitos
+            const regexCedula = /^\d{7,11}$/;
+            return {
+                valido: regexCedula.test(valor),
+                mensaje: 'La cédula debe contener solo números (7-11 dígitos)'
+            };
+        
+        case 'telefono':
+            // Teléfono: solo números, 7-15 dígitos
+            const regexTelefono = /^\d{7,15}$/;
+            return {
+                valido: regexTelefono.test(valor),
+                mensaje: 'El teléfono debe contener solo números (7-15 dígitos)'
+            };
+        
+        case 'email':
+            // Email: formato estándar
+            const regexEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            return {
+                valido: regexEmail.test(valor),
+                mensaje: 'Por favor ingresa un correo electrónico válido'
+            };
+        
+        case 'numero':
+            // Solo números
+            const regexNumero = /^\d+$/;
+            return {
+                valido: regexNumero.test(valor),
+                mensaje: 'Este campo solo acepta números'
+            };
+        
+        case 'alfanumerico':
+            // Alfanumérico: letras, números y espacios
+            const regexAlfanumerico = /^[a-zA-Z0-9\s]+$/;
+            return {
+                valido: regexAlfanumerico.test(valor),
+                mensaje: 'Este campo solo acepta letras, números y espacios'
+            };
+        
+        default:
+            return { valido: true };
+    }
+}
+
+// Agregar validación en tiempo real a los campos
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.campo-validado').forEach(campo => {
+        const tipoValidacion = campo.dataset.tipoValidacion;
+        if (tipoValidacion) {
+            const mensajeElement = document.getElementById(`mensaje_validacion_${campo.id.replace('campo_', '')}`);
+            
+            campo.addEventListener('blur', function() {
+                const valor = this.value.trim();
+                if (valor) {
+                    const resultado = validarFormato(valor, tipoValidacion);
+                    if (!resultado.valido) {
+                        this.classList.add('is-invalid');
+                        if (mensajeElement) {
+                            mensajeElement.textContent = resultado.mensaje;
+                            mensajeElement.style.display = 'block';
+                        }
+                    } else {
+                        this.classList.remove('is-invalid');
+                        this.classList.add('is-valid');
+                        if (mensajeElement) {
+                            mensajeElement.style.display = 'none';
+                        }
+                    }
+                } else {
+                    this.classList.remove('is-invalid', 'is-valid');
+                    if (mensajeElement) {
+                        mensajeElement.style.display = 'none';
+                    }
+                }
+            });
+            
+            campo.addEventListener('input', function() {
+                if (this.classList.contains('is-invalid')) {
+                    const valor = this.value.trim();
+                    if (valor) {
+                        const resultado = validarFormato(valor, tipoValidacion);
+                        if (resultado.valido) {
+                            this.classList.remove('is-invalid');
+                            this.classList.add('is-valid');
+                            if (mensajeElement) {
+                                mensajeElement.style.display = 'none';
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    });
+});
+
 const formulario = document.getElementById('formularioDiligenciar');
 if (formulario) {
     formulario.addEventListener('submit', function(e) {
+        // Validar formato de campos con validación
+        let erroresValidacion = [];
+        document.querySelectorAll('.campo-validado').forEach(campo => {
+            const tipoValidacion = campo.dataset.tipoValidacion;
+            if (tipoValidacion) {
+                const valor = campo.value.trim();
+                if (valor || campo.hasAttribute('required')) {
+                    const resultado = validarFormato(valor, tipoValidacion);
+                    if (!resultado.valido) {
+                        erroresValidacion.push({
+                            campo: campo.previousElementSibling?.textContent.replace(' *', '') || 'Campo',
+                            mensaje: resultado.mensaje
+                        });
+                        campo.classList.add('is-invalid');
+                        const campoId = campo.id.replace('campo_', '');
+                        const mensajeElement = document.getElementById(`mensaje_validacion_${campoId}`);
+                        if (mensajeElement) {
+                            mensajeElement.textContent = resultado.mensaje;
+                            mensajeElement.style.display = 'block';
+                        }
+                    }
+                }
+            }
+        });
+        
+        if (erroresValidacion.length > 0) {
+            e.preventDefault();
+            const mensaje = 'Por favor corrige los siguientes errores de formato:\n\n' +
+                          erroresValidacion.map(e => `- ${e.campo}: ${e.mensaje}`).join('\n');
+            alert(mensaje);
+            // Scroll al primer error
+            const primerError = document.querySelector('.is-invalid');
+            if (primerError) {
+                primerError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                primerError.focus();
+            }
+            return false;
+        }
+        
         // Validar campos obligatorios
         const camposObligatorios = document.querySelectorAll('[required]');
         let camposFaltantes = [];

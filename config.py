@@ -38,6 +38,18 @@ class Config:
     
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     
+    # Configuración de pool de conexiones para Vercel/serverless
+    # Importante para evitar problemas de conexión en entornos serverless
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        'pool_pre_ping': True,  # Verificar conexiones antes de usarlas
+        'pool_recycle': 300,    # Reciclar conexiones cada 5 minutos
+        'pool_size': 5,         # Tamaño del pool
+        'max_overflow': 10,     # Conexiones adicionales permitidas
+        'connect_args': {
+            'connect_timeout': 10,  # Timeout de conexión de 10 segundos
+        }
+    }
+    
     # Configuración de archivos
     UPLOAD_FOLDER = 'uploads'  # Se mantiene para compatibilidad temporal, pero no se usa
     MAX_CONTENT_LENGTH = 10 * 1024 * 1024  # 10MB max file size (reducido para evitar 413 en Vercel)

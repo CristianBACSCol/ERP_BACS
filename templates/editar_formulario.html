@@ -53,7 +53,9 @@
         <div id="campos-container">
             {% if formulario.campos %}
                 {% for campo in formulario.campos %}
-                <div class="campo-item" data-campo-id="{{ campo.id }}" data-tipo="{{ campo.tipo_campo }}">
+                {% set config = campo.configuracion|from_json if campo.configuracion else {} %}
+                {% set tipo_validacion = config.get('tipo_validacion', '') if config else '' %}
+                <div class="campo-item" data-campo-id="{{ campo.id }}" data-tipo="{{ campo.tipo_campo }}" {% if tipo_validacion %}data-validacion="{{ tipo_validacion }}"{% endif %}>
                     <div class="campo-header">
                         <div class="campo-info">
                             <span class="campo-tipo">{{ campo.tipo_campo|title }}</span>
@@ -142,6 +144,22 @@
                     <!-- Configuración específica por tipo de campo -->
                     <div id="configuracionEspecifica" style="display: none;">
                         <h5>Configuración Específica</h5>
+                        
+                        <!-- Para campos de texto: validación de formato -->
+                        <div id="validacionTexto" style="display: none;">
+                            <div class="form-group">
+                                <label for="tipoValidacion" class="form-label">Tipo de Validación</label>
+                                <select id="tipoValidacion" name="tipo_validacion" class="form-control">
+                                    <option value="">Sin validación (texto libre)</option>
+                                    <option value="cedula">Cédula de Identidad (solo números, 7-11 dígitos)</option>
+                                    <option value="telefono">Teléfono (solo números, 7-15 dígitos)</option>
+                                    <option value="email">Correo Electrónico</option>
+                                    <option value="numero">Solo Números</option>
+                                    <option value="alfanumerico">Alfanumérico (letras y números)</option>
+                                </select>
+                                <small class="form-text text-muted">Selecciona el tipo de validación para este campo. Los campos existentes sin validación seguirán funcionando normalmente.</small>
+                            </div>
+                        </div>
                         
                         <!-- Para campos de selección -->
                         <div id="opcionesSeleccion" style="display: none;">
@@ -440,7 +458,13 @@ function editarCampo(campoId) {
     cambiarTipoCampo();
     
     // Cargar configuración existente si hay
-    if (tipoCampo === 'seleccion') {
+    if (tipoCampo === 'texto') {
+        // Cargar tipo de validación si existe
+        const tipoValidacion = campoElement.dataset.validacion;
+        if (tipoValidacion) {
+            document.getElementById('tipoValidacion').value = tipoValidacion;
+        }
+    } else if (tipoCampo === 'seleccion') {
         // Cargar opciones existentes (esto requeriría una llamada AJAX para obtener la configuración)
         // Por ahora, simplemente mostrar el modal
     } else if (tipoCampo === 'seleccion_multiple') {
@@ -513,10 +537,12 @@ function cambiarTipoCampo() {
     const configuracion = document.getElementById('configuracionEspecifica');
     const opcionesSeleccion = document.getElementById('opcionesSeleccion');
     const configuracionMultiple = document.getElementById('configuracionMultiple');
+    const validacionTexto = document.getElementById('validacionTexto');
     
     // Ocultar todas las configuraciones específicas
     opcionesSeleccion.style.display = 'none';
     configuracionMultiple.style.display = 'none';
+    validacionTexto.style.display = 'none';
     
     if (tipo === 'seleccion') {
         configuracion.style.display = 'block';
@@ -524,6 +550,9 @@ function cambiarTipoCampo() {
     } else if (tipo === 'seleccion_multiple') {
         configuracion.style.display = 'block';
         configuracionMultiple.style.display = 'block';
+    } else if (tipo === 'texto') {
+        configuracion.style.display = 'block';
+        validacionTexto.style.display = 'block';
     } else if (tipo === 'texto_informativo') {
         configuracion.style.display = 'none';
     } else {
@@ -608,7 +637,12 @@ function guardarCampo() {
     };
     
     // Recopilar configuración específica
-    if (data.tipo_campo === 'seleccion') {
+    if (data.tipo_campo === 'texto') {
+        const tipoValidacion = formData.get('tipo_validacion');
+        if (tipoValidacion) {
+            data.configuracion.tipo_validacion = tipoValidacion;
+        }
+    } else if (data.tipo_campo === 'seleccion') {
         const opciones = Array.from(document.querySelectorAll('.opcion-input')).map(input => input.value).filter(val => val.trim());
         data.configuracion.opciones = opciones;
     } else if (data.tipo_campo === 'seleccion_multiple') {

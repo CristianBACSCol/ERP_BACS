@@ -44,6 +44,16 @@ def from_json(json_string):
 
 # Inicializar extensiones
 db = SQLAlchemy(app)
+
+# Configurar pool de conexiones para entornos serverless (Vercel)
+if hasattr(Config, 'SQLALCHEMY_ENGINE_OPTIONS'):
+    try:
+        from sqlalchemy import create_engine
+        engine = create_engine(app.config['SQLALCHEMY_DATABASE_URI'], **app.config['SQLALCHEMY_ENGINE_OPTIONS'])
+        db.engine = engine
+    except Exception as e:
+        print(f"Warning: No se pudo configurar pool de conexiones: {e}")
+
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
@@ -309,15 +319,51 @@ def index():
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        correo = request.form['correo']
-        password = request.form['password']
-        user = User.query.filter_by(correo=correo).first()
+        try:
+            correo = request.form.get('correo', '').strip()
+            password = request.form.get('password', '')
+            
+            if not correo or not password:
+                flash('Por favor completa todos los campos', 'error')
+                return render_template('login.html')
+            
+            # Buscar usuario
+            try:
+                user = User.query.filter_by(correo=correo).first()
+            except Exception as db_error:
+                print(f"ERROR en consulta de base de datos: {db_error}")
+                import traceback
+                traceback.print_exc()
+                flash('Error de conexión a la base de datos. Por favor intenta nuevamente.', 'error')
+                return render_template('login.html')
+            
+            if not user:
+                flash('Credenciales incorrectas', 'error')
+                return render_template('login.html')
+            
+            # Verificar contraseña
+            try:
+                if not user.password_hash:
+                    print(f"ERROR: Usuario {correo} no tiene password_hash")
+                    flash('Error en la configuración del usuario. Contacta al administrador.', 'error')
+                    return render_template('login.html')
+                
+                if check_password_hash(user.password_hash, password):
+                    login_user(user)
+                    return redirect(url_for('dashboard'))
+                else:
+                    flash('Credenciales incorrectas', 'error')
+            except Exception as pwd_error:
+                print(f"ERROR verificando contraseña: {pwd_error}")
+                import traceback
+                traceback.print_exc()
+                flash('Error al verificar la contraseña. Por favor intenta nuevamente.', 'error')
         
-        if user and check_password_hash(user.password_hash, password):
-            login_user(user)
-            return redirect(url_for('dashboard'))
-        else:
-            flash('Credenciales incorrectas', 'error')
+        except Exception as e:
+            print(f"ERROR general en login: {e}")
+            import traceback
+            traceback.print_exc()
+            flash('Error al procesar el inicio de sesión. Por favor intenta nuevamente.', 'error')
     
     return render_template('login.html')
 
@@ -2554,7 +2600,57 @@ def diligenciar_formulario(id):
                 
                 # Procesar según el tipo de campo
                 if campo.tipo_campo == 'texto':
-                    respuesta_campo.valor_texto = request.form.get(f'campo_{campo.id}', '')
+                    valor_texto = request.form.get(f'campo_{campo.id}', '').strip()
+                    
+                    # Validar formato si está configurado
+                    if campo.configuracion:
+                        try:
+                            config = json.loads(campo.configuracion) if isinstance(campo.configuracion, str) else campo.configuracion
+                            tipo_validacion = config.get('tipo_validacion', '')
+                            
+                            if tipo_validacion and valor_texto:
+                                import re
+                                valido = True
+                                mensaje_error = ''
+                                
+                                if tipo_validacion == 'cedula':
+                                    # Cédula: solo números, 7-11 dígitos
+                                    if not re.match(r'^\d{7,11}$', valor_texto):
+                                        valido = False
+                                        mensaje_error = 'La cédula debe contener solo números (7-11 dígitos)'
+                                
+                                elif tipo_validacion == 'telefono':
+                                    # Teléfono: solo números, 7-15 dígitos
+                                    if not re.match(r'^\d{7,15}$', valor_texto):
+                                        valido = False
+                                        mensaje_error = 'El teléfono debe contener solo números (7-15 dígitos)'
+                                
+                                elif tipo_validacion == 'email':
+                                    # Email: formato estándar
+                                    if not re.match(r'^[^\s@]+@[^\s@]+\.[^\s@]+$', valor_texto):
+                                        valido = False
+                                        mensaje_error = 'Por favor ingresa un correo electrónico válido'
+                                
+                                elif tipo_validacion == 'numero':
+                                    # Solo números
+                                    if not re.match(r'^\d+$', valor_texto):
+                                        valido = False
+                                        mensaje_error = 'Este campo solo acepta números'
+                                
+                                elif tipo_validacion == 'alfanumerico':
+                                    # Alfanumérico: letras, números y espacios
+                                    if not re.match(r'^[a-zA-Z0-9\s]+$', valor_texto):
+                                        valido = False
+                                        mensaje_error = 'Este campo solo acepta letras, números y espacios'
+                                
+                                if not valido:
+                                    flash(f'Error en el campo "{campo.titulo}": {mensaje_error}', 'error')
+                                    return redirect(url_for('diligenciar_formulario', id=id))
+                            
+                        except (json.JSONDecodeError, AttributeError):
+                            pass  # Si hay error al parsear la configuración, continuar sin validación
+                    
+                    respuesta_campo.valor_texto = valor_texto
                 elif campo.tipo_campo == 'textarea':
                     respuesta_campo.valor_texto = request.form.get(f'campo_{campo.id}', '')
                 elif campo.tipo_campo == 'fecha':

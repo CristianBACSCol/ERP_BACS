@@ -29,10 +29,17 @@
                     <label for="campo_{{ campo.id }}" class="form-label">
                         {{ campo.titulo }}{% if campo.obligatorio %} *{% endif %}
                     </label>
+                    {% set config = campo.configuracion|from_json if campo.configuracion else {} %}
+                    {% set tipo_validacion = config.get('tipo_validacion', '') if config else '' %}
                     <input type="text" id="campo_{{ campo.id }}" name="campo_{{ campo.id }}" 
-                           class="form-control" {% if campo.obligatorio %}required{% endif %}>
+                           class="form-control campo-validado" 
+                           {% if campo.obligatorio %}required{% endif %}
+                           {% if tipo_validacion %}data-tipo-validacion="{{ tipo_validacion }}"{% endif %}>
                     {% if campo.descripcion %}
                     <small class="form-text">{{ campo.descripcion }}</small>
+                    {% endif %}
+                    {% if tipo_validacion %}
+                    <small class="form-text text-muted" id="mensaje_validacion_{{ campo.id }}" style="display: none; color: #dc3545;"></small>
                     {% endif %}
                 
                 {% elif campo.tipo_campo == 'textarea' %}
