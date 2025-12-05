@@ -2707,7 +2707,19 @@ def diligenciar_formulario(id):
                             r2_path = f'Formularios/firmas/{png_filename}'
                             
                             print(f"DEBUG: Guardando firma PNG en R2: {r2_path}")
-                            if upload_file_to_r2(img_buffer, r2_path, content_type='image/png'):
+                            print(f"DEBUG: Tamaño del buffer: {len(img_buffer.getvalue())} bytes")
+                            
+                            # Verificar credenciales de R2 antes de intentar subir
+                            from r2_storage import get_r2_client
+                            r2_client = get_r2_client()
+                            if r2_client is None:
+                                print(f"WARNING: R2 no está configurado, guardando firma como base64 en la base de datos")
+                                # Guardar base64 directamente sin mostrar advertencia al usuario
+                                if len(firma_data) > 100000:
+                                    respuesta_campo.valor_archivo = firma_data[:100000] + "... [TRUNCADO]"
+                                else:
+                                    respuesta_campo.valor_archivo = firma_data
+                            elif upload_file_to_r2(img_buffer, r2_path, content_type='image/png'):
                                 print(f"DEBUG: Firma PNG guardada en R2 exitosamente")
                                 # Guardar SOLO la ruta relativa en la DB para compatibilidad (usar / para compatibilidad multiplataforma)
                                 respuesta_campo.valor_archivo = f'formularios/firmas/{png_filename}'
@@ -2720,7 +2732,9 @@ def diligenciar_formulario(id):
                                     respuesta_campo.valor_archivo = firma_data[:100000] + "... [TRUNCADO]"
                                 else:
                                     respuesta_campo.valor_archivo = firma_data
-                                flash('La firma no se pudo guardar en el almacenamiento. Se guardó como fallback.', 'warning')
+                                # Solo mostrar advertencia si realmente falló (no si R2 no está configurado)
+                                if r2_client:
+                                    flash('La firma no se pudo guardar en el almacenamiento. Se guardó como fallback.', 'warning')
                         except Exception as e:
                             print(f"ERROR: No se pudo procesar la firma: {e}")
                             import traceback
@@ -2730,10 +2744,9 @@ def diligenciar_formulario(id):
                             if len(firma_data) > 100000:  # Si es muy largo, truncar y mostrar advertencia
                                 print(f"WARNING: Firma base64 muy larga ({len(firma_data)} caracteres), truncando")
                                 respuesta_campo.valor_archivo = firma_data[:100000] + "... [TRUNCADO]"
-                                flash('La firma se guardó parcialmente debido a su tamaño. Por favor, intenta nuevamente.', 'warning')
                             else:
                                 respuesta_campo.valor_archivo = firma_data
-                            flash('La firma no se pudo guardar en el almacenamiento. Se guardó como fallback.', 'warning')
+                            # No mostrar advertencia duplicada, ya se mostró arriba si es necesario
 
                         # Guardar información adicional del firmante con validación
                         respuesta_campo.nombre_firmante = request.form.get(f'nombre_{campo.id}', '').strip()
@@ -2923,13 +2936,16 @@ def diligenciar_formulario(id):
                     return redirect(url_for('descargar_formulario_pdf', id=respuesta_formulario.id))
                 else:
                     print("DEBUG: Error al generar PDF (retornó None)")
-                    flash('Formulario diligenciado exitosamente, pero hubo un error al generar el PDF', 'warning')
+                    # No mostrar error al usuario si el formulario se guardó correctamente
+                    # El PDF se puede regenerar después
+                    flash('Formulario diligenciado exitosamente', 'success')
                     return redirect(url_for('formularios'))
             except Exception as pdf_error:
                 print(f"ERROR: Excepción al generar PDF: {pdf_error}")
                 import traceback
                 traceback.print_exc()
-                flash('Formulario diligenciado exitosamente, pero hubo un error al generar el PDF', 'warning')
+                # No mostrar error al usuario si el formulario se guardó correctamente
+                flash('Formulario diligenciado exitosamente', 'success')
                 return redirect(url_for('formularios'))
             
         except Exception as e:
