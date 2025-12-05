@@ -3072,10 +3072,17 @@ def descargar_formulario_pdf_file(id):
                 db.session.commit()
                 # Actualizar r2_path con el nuevo nombre
                 r2_path = f'Formularios/{formulario_nombre}/{pdf_path}'
+                # Esperar un momento para que R2 procese la subida
+                import time
+                time.sleep(1)
                 # Intentar descargar de nuevo
                 if file_exists_in_r2(r2_path):
                     temp_file = download_to_temp_file(r2_path)
-                    print(f"DEBUG: PDF regenerado y descargado exitosamente de R2")
+                    if temp_file and os.path.exists(temp_file) and os.path.getsize(temp_file) > 0:
+                        print(f"DEBUG: PDF regenerado y descargado exitosamente de R2: {os.path.getsize(temp_file)} bytes")
+                    else:
+                        print(f"ERROR: PDF descargado pero archivo temporal inválido o vacío")
+                        temp_file = None
                 else:
                     print(f"ERROR: PDF regenerado pero no se encuentra en R2: {r2_path}")
             else:
@@ -3091,34 +3098,54 @@ def descargar_formulario_pdf_file(id):
         flash('El PDF no está disponible. Por favor, contacta al administrador o verifica la configuración de R2.', 'error')
         return redirect(url_for('formularios'))
     
-    print(f"DEBUG: PDF descargado de R2 temporalmente para servir")
+    # Verificar que el archivo temporal existe y tiene contenido
+    if not os.path.exists(temp_file):
+        print(f"ERROR: Archivo temporal no existe: {temp_file}")
+        flash('El PDF no está disponible. Por favor, contacta al administrador.', 'error')
+        return redirect(url_for('formularios'))
     
-    def remove_temp_file(response):
+    file_size = os.path.getsize(temp_file)
+    if file_size == 0:
+        print(f"ERROR: Archivo temporal está vacío: {temp_file}")
+        flash('El PDF está corrupto. Por favor, intenta regenerarlo.', 'error')
+        return redirect(url_for('formularios'))
+    
+    print(f"DEBUG: PDF descargado de R2 temporalmente para servir: {file_size} bytes")
+    
+    # Leer el archivo y servirlo desde memoria para asegurar que se sirve correctamente
+    try:
+        with open(temp_file, 'rb') as f:
+            pdf_data = f.read()
+        
+        if len(pdf_data) == 0:
+            print(f"ERROR: Archivo PDF está vacío después de leer")
+            flash('El PDF está corrupto. Por favor, intenta regenerarlo.', 'error')
+            return redirect(url_for('formularios'))
+        
+        # Limpiar archivo temporal después de leerlo
         try:
             if os.path.exists(temp_file):
                 os.remove(temp_file)
         except:
             pass
+        
+        # Servir el PDF desde memoria con headers correctos
+        from flask import Response  # type: ignore
+        response = Response(
+            pdf_data,
+            mimetype='application/pdf',
+            headers={
+                'Content-Disposition': f'attachment; filename="{respuesta_formulario.archivo_pdf}"',
+                'Content-Length': str(len(pdf_data))
+            }
+        )
         return response
-    
-    from functools import wraps
-    from flask import after_this_request  # type: ignore
-    
-    @after_this_request
-    def cleanup(response):
-        try:
-            if os.path.exists(temp_file):
-                os.remove(temp_file)
-        except:
-            pass
-        return response
-    
-    return send_file(
-        temp_file,
-        mimetype='application/pdf',
-        as_attachment=True,
-        download_name=respuesta_formulario.archivo_pdf
-    )
+    except Exception as serve_error:
+        print(f"ERROR: Error al servir PDF: {serve_error}")
+        import traceback
+        traceback.print_exc()
+        flash('Error al servir el PDF. Por favor, intenta nuevamente.', 'error')
+        return redirect(url_for('formularios'))
 
 
 @app.route('/api/formularios/<int:id>/campos', methods=['POST'])
