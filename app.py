@@ -105,8 +105,8 @@ class User(UserMixin, db.Model):
     
     # Relaciones
     rol = db.relationship('Rol', backref='usuarios')
-    incidencias_creadas = db.relationship('Incidencia', foreign_keys='Incidencia.creado_por', backref='usuario_creador', overlaps="incidencias_creador")
-    incidencias_asignadas = db.relationship('Incidencia', foreign_keys='Incidencia.tecnico_asignado', backref='usuario_tecnico', overlaps="incidencias_tecnico")
+    incidencias_creadas = db.relationship('Incidencia', foreign_keys='Incidencia.creado_por', backref='usuario_creador', overlaps="incidencias_creador,usuario_creador")
+    incidencias_asignadas = db.relationship('Incidencia', foreign_keys='Incidencia.tecnico_asignado', backref='usuario_tecnico', overlaps="incidencias_tecnico,usuario_tecnico")
 
 class Rol(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -2712,9 +2712,17 @@ def diligenciar_formulario(id):
                                 # Guardar SOLO la ruta relativa en la DB para compatibilidad (usar / para compatibilidad multiplataforma)
                                 respuesta_campo.valor_archivo = f'formularios/firmas/{png_filename}'
                             else:
-                                raise Exception("Error al guardar firma en R2")
+                                # No lanzar excepción, usar fallback
+                                print(f"WARNING: No se pudo guardar firma en R2, usando fallback base64")
+                                # Guardar base64 como fallback
+                                if len(firma_data) > 100000:
+                                    print(f"WARNING: Firma base64 muy larga ({len(firma_data)} caracteres), truncando")
+                                    respuesta_campo.valor_archivo = firma_data[:100000] + "... [TRUNCADO]"
+                                else:
+                                    respuesta_campo.valor_archivo = firma_data
+                                flash('La firma no se pudo guardar en el almacenamiento. Se guardó como fallback.', 'warning')
                         except Exception as e:
-                            print(f"ERROR: No se pudo guardar la firma PNG en R2: {e}")
+                            print(f"ERROR: No se pudo procesar la firma: {e}")
                             import traceback
                             traceback.print_exc()
                             # Intentar guardar base64 como fallback (ahora soporta TEXT ilimitado)
@@ -2902,18 +2910,25 @@ def diligenciar_formulario(id):
             # Generar PDF automáticamente - USANDO LA FUNCIÓN ORIGINAL QUE FUNCIONABA
             print(f"DEBUG: Iniciando generación de PDF para respuesta {respuesta_formulario.id}")
             
-            pdf_path = generar_pdf_formulario(respuesta_formulario)
-            
-            if pdf_path:
-                respuesta_formulario.archivo_pdf = pdf_path
-                db.session.commit()
-                print(f"DEBUG: PDF generado exitosamente: {pdf_path}")
+            try:
+                pdf_path = generar_pdf_formulario(respuesta_formulario)
                 
-                # Redirigir a página de descarga
-                flash('Formulario diligenciado y PDF generado exitosamente', 'success')
-                return redirect(url_for('descargar_formulario_pdf', id=respuesta_formulario.id))
-            else:
-                print("DEBUG: Error al generar PDF")
+                if pdf_path:
+                    respuesta_formulario.archivo_pdf = pdf_path
+                    db.session.commit()
+                    print(f"DEBUG: PDF generado exitosamente: {pdf_path}")
+                    
+                    # Redirigir a página de descarga
+                    flash('Formulario diligenciado y PDF generado exitosamente', 'success')
+                    return redirect(url_for('descargar_formulario_pdf', id=respuesta_formulario.id))
+                else:
+                    print("DEBUG: Error al generar PDF (retornó None)")
+                    flash('Formulario diligenciado exitosamente, pero hubo un error al generar el PDF', 'warning')
+                    return redirect(url_for('formularios'))
+            except Exception as pdf_error:
+                print(f"ERROR: Excepción al generar PDF: {pdf_error}")
+                import traceback
+                traceback.print_exc()
                 flash('Formulario diligenciado exitosamente, pero hubo un error al generar el PDF', 'warning')
                 return redirect(url_for('formularios'))
             
@@ -4098,9 +4113,21 @@ def generar_pdf_formulario(respuesta_formulario):
         pdf_bytes = buffer.getvalue()
         if upload_file_to_r2(pdf_bytes, r2_path, content_type='application/pdf'):
             print(f"DEBUG: PDF generado exitosamente en R2: {documento_nombre}")
+            return documento_nombre
         else:
             print(f"ERROR: No se pudo guardar PDF en R2")
-            return None
+            # Intentar guardar localmente como fallback
+            try:
+                from werkzeug.utils import secure_filename
+                local_path = os.path.join('uploads', 'r2_storage', r2_path)
+                os.makedirs(os.path.dirname(local_path), exist_ok=True)
+                with open(local_path, 'wb') as f:
+                    f.write(pdf_bytes)
+                print(f"DEBUG: PDF guardado localmente como fallback: {local_path}")
+                return documento_nombre
+            except Exception as local_error:
+                print(f"ERROR: No se pudo guardar PDF ni localmente: {local_error}")
+                return None
         
         # OPTIMIZACIÓN: Reducir tiempo de espera para evitar timeout
         # Esperar 2 segundos antes de eliminar imágenes y firmas (reducido de 5)
