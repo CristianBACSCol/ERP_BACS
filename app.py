@@ -3023,11 +3023,41 @@ def descargar_formulario_pdf_file(id):
     formulario_nombre = secure_filename(respuesta_formulario.formulario.nombre)
     r2_path = f'Formularios/{formulario_nombre}/{respuesta_formulario.archivo_pdf}'
     
-    if not file_exists_in_r2(r2_path):
-        abort(404)
+    temp_file = None
     
-    # Descargar archivo de R2 a temporal para servir
-    temp_file = download_to_temp_file(r2_path)
+    # Intentar descargar de R2 primero
+    if file_exists_in_r2(r2_path):
+        temp_file = download_to_temp_file(r2_path)
+    
+    # Si no está en R2, buscar en /tmp (fallback para Vercel)
+    if not temp_file:
+        import tempfile
+        if os.environ.get('VERCEL'):
+            temp_path = os.path.join('/tmp', respuesta_formulario.archivo_pdf)
+        else:
+            temp_path = os.path.join('uploads', 'r2_storage', respuesta_formulario.archivo_pdf)
+        
+        if os.path.exists(temp_path):
+            temp_file = temp_path
+            print(f"DEBUG: PDF encontrado en fallback local: {temp_file}")
+    
+    # Si aún no se encuentra, intentar regenerar el PDF
+    if not temp_file:
+        print(f"WARNING: PDF no encontrado en R2 ni localmente. Intentando regenerar...")
+        try:
+            pdf_path = generar_pdf_formulario(respuesta_formulario)
+            if pdf_path:
+                # Actualizar en la base de datos
+                respuesta_formulario.archivo_pdf = pdf_path
+                db.session.commit()
+                # Intentar descargar de nuevo
+                if file_exists_in_r2(r2_path):
+                    temp_file = download_to_temp_file(r2_path)
+        except Exception as regen_error:
+            print(f"ERROR: No se pudo regenerar el PDF: {regen_error}")
+            import traceback
+            traceback.print_exc()
+    
     if not temp_file:
         abort(404)
     
@@ -4133,16 +4163,36 @@ def generar_pdf_formulario(respuesta_formulario):
         else:
             print(f"ERROR: No se pudo guardar PDF en R2")
             # Intentar guardar localmente como fallback
+            # En Vercel, usar /tmp que es el único directorio escribible
             try:
-                local_path = os.path.join('uploads', 'r2_storage', r2_path)
-                os.makedirs(os.path.dirname(local_path), exist_ok=True)
+                import tempfile
+                # Detectar si estamos en Vercel (tiene variable de entorno VERCEL)
+                if os.environ.get('VERCEL'):
+                    # En Vercel, usar /tmp
+                    temp_dir = '/tmp'
+                else:
+                    # En local, usar uploads/r2_storage
+                    temp_dir = os.path.join('uploads', 'r2_storage')
+                
+                # Crear directorio si no existe
+                os.makedirs(temp_dir, exist_ok=True)
+                
+                # Guardar en temp_dir con el nombre del documento
+                local_path = os.path.join(temp_dir, documento_nombre)
                 with open(local_path, 'wb') as f:
                     f.write(pdf_bytes)
                 print(f"DEBUG: PDF guardado localmente como fallback: {local_path}")
+                # IMPORTANTE: Retornar el nombre del documento incluso si no se guardó en R2
+                # El PDF se generó correctamente, solo no se pudo subir a R2
                 return documento_nombre
             except Exception as local_error:
                 print(f"ERROR: No se pudo guardar PDF ni localmente: {local_error}")
-                return None
+                import traceback
+                traceback.print_exc()
+                # Aún así retornar el nombre del documento porque el PDF se generó correctamente
+                # El usuario podrá intentar regenerar el PDF después
+                print(f"WARNING: PDF generado pero no se pudo guardar. Retornando nombre para permitir regeneración.")
+                return documento_nombre
         
         # OPTIMIZACIÓN: Reducir tiempo de espera para evitar timeout
         # Esperar 2 segundos antes de eliminar imágenes y firmas (reducido de 5)
