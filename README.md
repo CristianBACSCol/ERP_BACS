@@ -101,23 +101,37 @@ R2_BUCKET_NAME=erp-bacs
 **Si tienes un backup SQL previo** (archivo `erp_bacs (1).sql`):
 
 ```bash
-python migrar_supabase.py
+python migrar.py desde-sql
 ```
 
-Este script:
+Este comando:
 - ✅ Lee el archivo SQL de backup
 - ✅ Convierte la sintaxis de MySQL a PostgreSQL
 - ✅ Crea todas las tablas en Supabase
 - ✅ Migra todos los datos (usuarios, clientes, formularios, respuestas, etc.)
-- ✅ Configura índices y relaciones
+- ✅ Arregla las secuencias de PostgreSQL
+- ✅ Migra el campo `valor_archivo` a TEXT
 
 **Si es una instalación nueva**:
 
 ```bash
-python migrar_db.py
+python migrar.py inicial
 ```
 
-Este script crea las tablas y datos iniciales.
+Este comando crea las tablas y datos iniciales (roles, sistemas, usuario administrador, índices).
+
+**Otros comandos disponibles**:
+
+```bash
+# Arreglar secuencias de PostgreSQL (si hay errores de claves duplicadas)
+python migrar.py arreglar-secuencias
+
+# Migrar campo valor_archivo a TEXT (si hay errores de "value too long")
+python migrar.py migrar-campo
+
+# Ejecutar todas las migraciones necesarias automáticamente
+python migrar.py todo
+```
 
 #### 5. Ejecutar Aplicación
 
@@ -268,8 +282,7 @@ erp_bacs/
 ├── config.py                  # Configuración del sistema
 ├── r2_storage.py              # Utilidades para Cloudflare R2
 ├── ejecutar_app.py            # Script de ejecución
-├── migrar_db.py               # Migración inicial de base de datos
-├── migrar_supabase.py         # Migración de backup SQL a Supabase
+├── migrar.py                  # Script unificado de migración (consolida todas las migraciones)
 ├── requirements.txt           # Dependencias Python
 ├── vercel.json                # Configuración de Vercel
 ├── env.local.example          # Ejemplo de configuración local
@@ -376,10 +389,10 @@ source venv/bin/activate  # Linux/Mac
 python ejecutar_app.py
 
 # Migrar base de datos (nueva instalación)
-python migrar_db.py
+python migrar.py inicial
 
 # Migrar desde backup SQL a Supabase
-python migrar_supabase.py
+python migrar.py desde-sql
 ```
 
 ### Mantenimiento

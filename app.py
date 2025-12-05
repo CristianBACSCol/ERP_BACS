@@ -248,7 +248,7 @@ class RespuestaCampo(db.Model):
     campo_id = db.Column(db.Integer, db.ForeignKey('campo_formulario.id'), nullable=False)
     valor_texto = db.Column(db.Text)
     valor_fecha = db.Column(db.DateTime)
-    valor_archivo = db.Column(db.String(500))  # Para firmas, fotos, etc.
+    valor_archivo = db.Column(db.Text)  # Para firmas, fotos, etc. (cambiado de String(500) a Text para soportar base64 de imágenes)
     valor_json = db.Column(db.Text)  # Para selecciones múltiples y otros datos complejos
     # Campos adicionales para firmas
     nombre_firmante = db.Column(db.String(100))
@@ -2714,9 +2714,18 @@ def diligenciar_formulario(id):
                             else:
                                 raise Exception("Error al guardar firma en R2")
                         except Exception as e:
-                            print(f"ERROR: No se pudo guardar la firma PNG: {e}")
-                            # Como fallback guarda el base64 para no perder datos
-                            respuesta_campo.valor_archivo = firma_data
+                            print(f"ERROR: No se pudo guardar la firma PNG en R2: {e}")
+                            import traceback
+                            traceback.print_exc()
+                            # Intentar guardar base64 como fallback (ahora soporta TEXT ilimitado)
+                            # Truncar si es muy largo para evitar problemas (aunque TEXT lo soporta)
+                            if len(firma_data) > 100000:  # Si es muy largo, truncar y mostrar advertencia
+                                print(f"WARNING: Firma base64 muy larga ({len(firma_data)} caracteres), truncando")
+                                respuesta_campo.valor_archivo = firma_data[:100000] + "... [TRUNCADO]"
+                                flash('La firma se guardó parcialmente debido a su tamaño. Por favor, intenta nuevamente.', 'warning')
+                            else:
+                                respuesta_campo.valor_archivo = firma_data
+                            flash('La firma no se pudo guardar en el almacenamiento. Se guardó como fallback.', 'warning')
 
                         # Guardar información adicional del firmante con validación
                         respuesta_campo.nombre_firmante = request.form.get(f'nombre_{campo.id}', '').strip()
