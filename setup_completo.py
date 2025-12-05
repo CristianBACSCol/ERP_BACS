@@ -153,24 +153,29 @@ def configurar_archivo_env():
     print("✅ Archivo .env creado desde env.local.example")
     
     print("\n⚠️  IMPORTANTE: Debes editar el archivo .env con tus datos:")
-    print("- DB_USER: tu usuario de MySQL")
-    print("- DB_PASSWORD: tu contraseña de MySQL")
+    print("- DB_HOST: host de Supabase (ej: aws-0-us-east-1.pooler.supabase.com)")
+    print("- DB_PORT: puerto de Supabase (6543 para pooler, 5432 para directo)")
+    print("- DB_USER: tu usuario de Supabase")
+    print("- DB_PASSWORD: tu contraseña de Supabase")
+    print("- SUPABASE_DB_URL: URL completa de conexión (opcional pero recomendado)")
     print("- SECRET_KEY: genera una clave secreta")
     print("- INITIAL_USER_EMAIL: email del administrador")
     print("- INITIAL_USER_PASSWORD: contraseña del administrador")
+    print("- R2_*: credenciales de Cloudflare R2 (opcional para desarrollo local)")
     
     return True
 
-def verificar_mysql():
-    """Verificar conexión a MySQL"""
-    print_step(5, "Verificando MySQL")
+def verificar_supabase():
+    """Verificar configuración de Supabase"""
+    print_step(5, "Verificando configuración de Supabase")
     
     try:
-        import pymysql
-        print("✅ PyMySQL disponible")
+        import psycopg2
+        print("✅ psycopg2-binary disponible")
     except ImportError:
-        print("❌ PyMySQL no disponible")
-        return False
+        print("⚠️  psycopg2-binary no disponible (se instalará automáticamente)")
+        print("🔄 Instalando psycopg2-binary...")
+        ejecutar_comando(f"{sys.executable} -m pip install psycopg2-binary", "Instalando psycopg2-binary")
     
     # Intentar leer configuración del .env
     env_file = Path(".env")
@@ -181,9 +186,10 @@ def verificar_mysql():
     # Leer configuración básica
     print("✅ Archivo .env encontrado")
     print("⚠️  Asegúrate de que:")
-    print("1. MySQL esté ejecutándose")
-    print("2. La base de datos 'erp_bacs' exista")
-    print("3. Las credenciales en .env sean correctas")
+    print("1. Tengas un proyecto creado en Supabase")
+    print("2. Las credenciales de Supabase en .env sean correctas")
+    print("3. Tu IP esté permitida en Supabase (Settings → Database → Connection Pooling)")
+    print("4. Puedes usar SUPABASE_DB_URL o las variables individuales (DB_HOST, DB_PORT, etc.)")
     
     return True
 
@@ -203,9 +209,10 @@ def ejecutar_migracion():
     else:
         print("❌ Error en la migración")
         print("Verifica:")
-        print("1. MySQL esté ejecutándose")
-        print("2. Base de datos 'erp_bacs' exista")
-        print("3. Credenciales en .env sean correctas")
+        print("1. Las credenciales de Supabase en .env sean correctas")
+        print("2. Tu proyecto de Supabase esté activo")
+        print("3. Tu IP esté permitida en Supabase")
+        print("4. Si tienes un backup SQL, usa: python migrar_supabase.py")
         return False
 
 def verificar_sistema():
@@ -244,19 +251,20 @@ def mostrar_resumen():
     print("🎉 ¡Instalación completada exitosamente!")
     
     print("\n📋 Próximos pasos:")
-    print("1. Verifica que el archivo .env tenga tus datos correctos")
-    print("2. Asegúrate de que MySQL esté ejecutándose")
+    print("1. Verifica que el archivo .env tenga tus credenciales de Supabase correctas")
+    print("2. Asegúrate de que tu proyecto de Supabase esté activo")
     print("3. Ejecuta: python ejecutar_app.py")
     print("4. Abre tu navegador en: http://localhost:5000")
     
     print("\n🔧 Comandos útiles:")
     print("- Activar entorno virtual: venv\\Scripts\\activate (Windows)")
     print("- Ejecutar aplicación: python ejecutar_app.py")
-    print("- Ejecutar migración: python migrar_db.py")
+    print("- Ejecutar migración inicial: python migrar_db.py")
+    print("- Migrar desde backup SQL: python migrar_supabase.py")
     
     print("\n📞 Si tienes problemas:")
-    print("- Revisa el archivo .env")
-    print("- Verifica que MySQL esté ejecutándose")
+    print("- Revisa el archivo .env y verifica las credenciales de Supabase")
+    print("- Verifica que tu IP esté permitida en Supabase")
     print("- Consulta la sección de solución de problemas en README.md")
 
 def main():
@@ -287,9 +295,9 @@ def main():
         print("\n❌ Error configurando .env")
         return False
     
-    # Verificar MySQL
-    if not verificar_mysql():
-        print("\n❌ Error verificando MySQL")
+    # Verificar Supabase
+    if not verificar_supabase():
+        print("\n❌ Error verificando configuración de Supabase")
         return False
     
     # Ejecutar migración

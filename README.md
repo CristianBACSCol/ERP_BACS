@@ -4,21 +4,20 @@
 
 El ERP BACS es un sistema de gestión empresarial desarrollado específicamente para la empresa BACS (Building Automation and Control System SAS). Este sistema permite la gestión integral de incidencias técnicas, clientes, usuarios, sedes y sistemas, proporcionando una plataforma centralizada para el seguimiento y resolución de problemas técnicos.
 
+## 🏗️ Arquitectura del Sistema
+
+- **Base de Datos**: Supabase (PostgreSQL) - Almacena todos los datos SQL (usuarios, clientes, formularios, incidencias, etc.)
+- **Almacenamiento de Archivos**: Cloudflare R2 - Almacena imágenes, PDFs, firmas y documentos
+- **Hosting**: Vercel - Plataforma de despliegue serverless
+
 ## 🚀 Instalación y Configuración
 
 ### Requisitos Previos
 
 1. **Python 3.8 o superior** - [python.org](https://www.python.org/downloads/)
-2. **MySQL Server** - [mysql.com](https://dev.mysql.com/downloads/mysql/) o XAMPP
-3. **Git** (opcional) - [git-scm.com](https://git-scm.com/downloads)
-
-### Instalación Automática
-
-```bash
-python setup_completo.py
-```
-
-Este script crea el entorno virtual, instala dependencias, configura la base de datos y crea el archivo `.env`.
+2. **Cuenta de Supabase** - [supabase.com](https://supabase.com) (para base de datos)
+3. **Cuenta de Cloudflare R2** - [cloudflare.com](https://www.cloudflare.com/products/r2/) (para almacenamiento de archivos)
+4. **Git** (opcional) - [git-scm.com](https://git-scm.com/downloads)
 
 ### Instalación Manual
 
@@ -38,43 +37,87 @@ pip install -r requirements.txt
 
 #### 2. Configurar Variables de Entorno
 
-Crea un archivo `.env` en la raíz del proyecto con:
+Crea un archivo `.env` en la raíz del proyecto. Puedes usar `env.local.example` como referencia:
 
 ```env
-# Base de datos
-DB_HOST=localhost
-DB_PORT=3306
-DB_USER=root
-DB_PASSWORD=
-DB_NAME=erp_bacs
+# Base de datos Supabase (PostgreSQL)
+# ⚠️ IMPORTANTE: La conexión directa solo funciona con IPv6
+# Si estás en una red IPv4 (la mayoría, incluyendo Vercel), usa Session Pooler
+# Obtén estos valores de: Supabase Dashboard > Settings > Database > Connection string
 
-# Aplicación
+# Opción 1: Session Pooler (RECOMENDADO - compatible con IPv4)
+# Ve a: Supabase Dashboard > Settings > Database > Connection string
+# Selecciona "Session mode" y copia la URL
+DB_HOST=aws-0-us-west-2.pooler.supabase.com
+DB_PORT=5432
+DB_USER=postgres.tu_proyecto
+DB_PASSWORD=tu_contraseña_supabase
+DB_NAME=postgres
+
+# Opción 2: Transaction Pooler (alternativa)
+# Selecciona "Transaction mode" en Supabase Dashboard
+# DB_HOST=aws-0-us-west-2.pooler.supabase.com
+# DB_PORT=5432
+# DB_USER=postgres.tu_proyecto
+# DB_PASSWORD=tu_contraseña_supabase
+# DB_NAME=postgres
+
+# URL de conexión Session Pooler (RECOMENDADO - compatible IPv4)
+# Obtén esta URL de: Supabase Dashboard > Connection string > Session mode
+SUPABASE_DB_URL=postgresql://postgres.tu_proyecto:tu_contraseña@aws-0-us-west-2.pooler.supabase.com:5432/postgres
+
+# Configuración de la aplicación
 SECRET_KEY=tu_clave_secreta_muy_segura_aqui_2024
 FLASK_ENV=development
 FLASK_DEBUG=True
 
-# Usuario inicial
+# Usuario inicial del sistema
 INITIAL_USER_EMAIL=admin@tuempresa.com
 INITIAL_USER_PASSWORD=tu_contraseña_segura_aqui
 
-# Cloudflare R2 (dejar vacío para modo local)
+# Cloudflare R2 (almacenamiento de archivos)
+# Deja vacío para desarrollo local (usará almacenamiento local)
 R2_ENDPOINT_URL=
 R2_ACCESS_KEY_ID=
 R2_SECRET_ACCESS_KEY=
 R2_BUCKET_NAME=erp-bacs
 ```
 
-#### 3. Configurar Base de Datos
+**⚠️ IMPORTANTE**: El archivo `.env` está en `.gitignore` y no se subirá a GitHub.
 
-```sql
-CREATE DATABASE erp_bacs CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+#### 3. Configurar Base de Datos en Supabase
+
+1. Crea un proyecto en [Supabase](https://supabase.com)
+2. Ve a **Settings** → **Database** → **Connection string**
+3. **IMPORTANTE**: La conexión directa solo funciona con IPv6
+4. **Para redes IPv4** (la mayoría, incluyendo Vercel): Selecciona **"Session mode"** o **"Transaction mode"**
+5. Copia la URL completa que aparece
+6. Configura las variables en tu `.env`
+
+**💡 Recomendación**: Usa **Session Pooler** (puerto 6543) - es compatible con IPv4 y funciona en Vercel.
+
+#### 4. Migración de Base de Datos
+
+**Si tienes un backup SQL previo** (archivo `erp_bacs (1).sql`):
+
+```bash
+python migrar_supabase.py
 ```
 
-#### 4. Ejecutar Migración
+Este script:
+- ✅ Lee el archivo SQL de backup
+- ✅ Convierte la sintaxis de MySQL a PostgreSQL
+- ✅ Crea todas las tablas en Supabase
+- ✅ Migra todos los datos (usuarios, clientes, formularios, respuestas, etc.)
+- ✅ Configura índices y relaciones
+
+**Si es una instalación nueva**:
 
 ```bash
 python migrar_db.py
 ```
+
+Este script crea las tablas y datos iniciales.
 
 #### 5. Ejecutar Aplicación
 
@@ -84,15 +127,15 @@ python ejecutar_app.py
 
 Accede a: `http://localhost:5000`
 
-## 🏠 Desarrollo Local (XAMPP)
+## 🏠 Desarrollo Local
 
 ### Configuración Local
 
-1. **Base de datos**: Usa MySQL de XAMPP (localhost)
-2. **Almacenamiento**: Deja R2 vacío en `.env` → usa `uploads/r2_storage/`
-3. **Archivos**: Se guardan localmente en `uploads/r2_storage/`
+1. **Base de datos**: Usa Supabase (remoto) - No necesitas instalar PostgreSQL localmente
+2. **Almacenamiento**: Deja R2 vacío en `.env` → usa `uploads/r2_storage/` localmente
+3. **Archivos**: Se guardan localmente en `uploads/r2_storage/` durante desarrollo
 
-### Estructura Local
+### Estructura Local de Archivos
 
 ```
 uploads/r2_storage/
@@ -107,35 +150,22 @@ uploads/r2_storage/
 
 ### Configurar Variables de Entorno en Vercel
 
-1. Ve a Vercel Dashboard → Tu Proyecto → Settings → Environment Variables
-2. Agrega las siguientes variables:
-
-```
-DB_HOST=tu_host_remoto
-DB_PORT=3306
-DB_USER=tu_usuario_remoto
-DB_PASSWORD=tu_contraseña_remota
-DB_NAME=tu_base_de_datos
-
-SECRET_KEY=tu_clave_secreta_muy_segura_aqui_2024
-FLASK_ENV=production
-FLASK_DEBUG=False
-
-INITIAL_USER_EMAIL=admin@tuempresa.com
-INITIAL_USER_PASSWORD=tu_contraseña_segura_aqui
-
-R2_ENDPOINT_URL=https://tu_endpoint.r2.cloudflarestorage.com
-R2_ACCESS_KEY_ID=tu_access_key_id
-R2_SECRET_ACCESS_KEY=tu_secret_access_key
-R2_BUCKET_NAME=erp-bacs
-```
+1. Ve a **Vercel Dashboard** → Tu Proyecto → **Settings** → **Environment Variables**
+2. Agrega todas las variables de tu `.env`:
+   - `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`
+   - `SUPABASE_DB_URL` (opcional, pero recomendado)
+   - `SECRET_KEY`, `FLASK_ENV`, `FLASK_DEBUG`
+   - `INITIAL_USER_EMAIL`, `INITIAL_USER_PASSWORD`
+   - `R2_ENDPOINT_URL`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`
+3. Selecciona el entorno: **Production** (y opcionalmente Preview/Development)
+4. Guarda y **redespliega** la aplicación
 
 ### Despliegue
 
 1. Conecta tu repositorio de GitHub con Vercel
 2. Vercel detectará automáticamente el proyecto
-3. Configura las variables de entorno
-4. Haz clic en "Deploy"
+3. Configura las variables de entorno en el dashboard
+4. Haz clic en **Deploy**
 
 ## 📸 Procesamiento de Imágenes
 
@@ -214,7 +244,8 @@ El sistema optimiza automáticamente las imágenes:
 - **Python 3.8+** - Lenguaje principal
 - **Flask 2.3.3** - Framework web
 - **SQLAlchemy 3.0.5** - ORM para base de datos
-- **MySQL** - Base de datos relacional
+- **PostgreSQL (Supabase)** - Base de datos relacional
+- **psycopg2-binary** - Driver de PostgreSQL
 - **ReportLab 4.0.4** - Generación de PDFs
 - **Pillow 11.3.0** - Procesamiento de imágenes
 - **pillow-heif** - Soporte para formato HEIC
@@ -224,9 +255,10 @@ El sistema optimiza automáticamente las imágenes:
 - **Canvas API** - Firmas digitales
 - **Responsive Design** - Adaptable a móviles
 
-### Almacenamiento
-- **Cloudflare R2** - Almacenamiento en producción
-- **Sistema de archivos local** - Almacenamiento en desarrollo
+### Almacenamiento y Base de Datos
+- **Supabase (PostgreSQL)** - Base de datos SQL (usuarios, clientes, formularios, etc.)
+- **Cloudflare R2** - Almacenamiento de archivos (imágenes, PDFs, firmas)
+- **Sistema de archivos local** - Almacenamiento en desarrollo (cuando R2 no está configurado)
 
 ## 📁 Estructura del Proyecto
 
@@ -236,10 +268,12 @@ erp_bacs/
 ├── config.py                  # Configuración del sistema
 ├── r2_storage.py              # Utilidades para Cloudflare R2
 ├── ejecutar_app.py            # Script de ejecución
-├── migrar_db.py               # Migración de base de datos
-├── setup_completo.py          # Setup automático completo
+├── migrar_db.py               # Migración inicial de base de datos
+├── migrar_supabase.py         # Migración de backup SQL a Supabase
 ├── requirements.txt           # Dependencias Python
 ├── vercel.json                # Configuración de Vercel
+├── env.local.example          # Ejemplo de configuración local
+├── env.production.example     # Ejemplo de configuración producción
 ├── api/
 │   └── index.py               # Handler para Vercel
 ├── static/
@@ -257,6 +291,7 @@ erp_bacs/
 - ✅ Los archivos `env.local.example` y `env.production.example` están en `.gitignore` (guárdalos localmente)
 - ✅ En Vercel, configura las variables de entorno en el dashboard
 - ✅ Usa contraseñas seguras y únicas
+- ✅ Las credenciales de Supabase y R2 deben mantenerse privadas
 
 ## 🐛 Solución de Problemas
 
@@ -274,14 +309,45 @@ pip install pillow-heif
 - El sistema optimiza automáticamente las imágenes
 - Si persiste, verifica que `vercel.json` tenga los límites configurados
 
-### Error: "Database connection failed"
-- Verifica que MySQL esté corriendo (XAMPP)
-- Verifica las credenciales en `.env`
-- Verifica que la base de datos exista
+### Error: "Database connection failed" o "Could not connect to Supabase"
+- Verifica que las credenciales de Supabase en `.env` sean correctas
+- **IMPORTANTE**: La conexión directa solo funciona con IPv6
+- **Para redes IPv4** (la mayoría): Usa **Session Pooler** (puerto `6543`, usuario `postgres.tu_proyecto`)
+- Verifica que tu IP esté permitida en Supabase (Settings → Database → Connection Pooling)
+- Prueba usar `SUPABASE_DB_URL` con la URL completa de Supabase Dashboard
+
+### Error: "could not translate host name" o "Name or service not known"
+- Este error indica que estás intentando usar conexión directa en una red IPv4
+- **Solución**: Usa **Session Pooler** o **Transaction Pooler**:
+  1. Ve a Supabase Dashboard > Settings > Database > Connection string
+  2. Selecciona **"Session mode"** o **"Transaction mode"** (no "Direct connection")
+  3. Copia la URL completa y úsala como `SUPABASE_DB_URL`
+  4. O configura: `DB_PORT=6543` y `DB_USER=postgres.tu_proyecto` en tu `.env`
+
+### Error: "Tenant or user not found"
+- Este error generalmente ocurre cuando tu IP no está permitida en Supabase
+- **Solución**: 
+  1. Ve a Supabase Dashboard > Settings > Database > Connection Pooling
+  2. Agrega tu IP a "Allowed IPs" o usa `0.0.0.0/0` temporalmente para pruebas
+  3. Verifica que el usuario sea `postgres.tu_proyecto` (no solo `postgres`) para el pooler
+
+### Error: "psycopg2 no está instalado"
+```bash
+pip install psycopg2-binary
+```
+
+### Error: "No se encontró el archivo erp_bacs (1).sql"
+- Asegúrate de que el archivo esté en la raíz del proyecto
+- Verifica que el nombre del archivo sea exactamente `erp_bacs (1).sql`
 
 ### Error: "Las credenciales de R2 no están configuradas"
-- **Local**: Es normal, el sistema usará almacenamiento local
+- **Local**: Es normal, el sistema usará almacenamiento local en `uploads/r2_storage/`
 - **Producción**: Verifica que las variables de entorno estén configuradas en Vercel
+
+### Error: "Duplicate key" o "Unique constraint violation"
+- Esto es normal si ejecutas la migración múltiples veces
+- El script usa `ON CONFLICT DO NOTHING` para evitar duplicados
+- Si necesitas reiniciar, puedes eliminar las tablas en Supabase y volver a ejecutar
 
 ## 📊 Características de Optimización de Imágenes
 
@@ -309,8 +375,11 @@ source venv/bin/activate  # Linux/Mac
 # Ejecutar aplicación
 python ejecutar_app.py
 
-# Ejecutar migración
+# Migrar base de datos (nueva instalación)
 python migrar_db.py
+
+# Migrar desde backup SQL a Supabase
+python migrar_supabase.py
 ```
 
 ### Mantenimiento
@@ -321,6 +390,16 @@ pip install --upgrade -r requirements.txt
 # Verificar dependencias
 pip list
 ```
+
+## 📝 Notas Importantes
+
+1. **Base de Datos**: El sistema usa Supabase (PostgreSQL) para almacenar todos los datos SQL. No se requiere instalación local de PostgreSQL.
+
+2. **Almacenamiento de Archivos**: Los archivos (imágenes, PDFs, firmas) se almacenan en Cloudflare R2, no en Supabase. Esto permite escalabilidad y mejor rendimiento.
+
+3. **Desarrollo Local**: Durante el desarrollo, puedes dejar R2 sin configurar y el sistema usará almacenamiento local. La base de datos siempre se conecta a Supabase (remoto).
+
+4. **Producción**: En producción (Vercel), tanto Supabase como Cloudflare R2 deben estar configurados correctamente.
 
 ## 📞 Soporte
 
