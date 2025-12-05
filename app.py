@@ -105,8 +105,8 @@ class User(UserMixin, db.Model):
     
     # Relaciones
     rol = db.relationship('Rol', backref='usuarios')
-    incidencias_creadas = db.relationship('Incidencia', foreign_keys='Incidencia.creado_por', backref='usuario_creador', overlaps="incidencias_creador,usuario_creador")
-    incidencias_asignadas = db.relationship('Incidencia', foreign_keys='Incidencia.tecnico_asignado', backref='usuario_tecnico', overlaps="incidencias_tecnico,usuario_tecnico")
+    incidencias_creadas = db.relationship('Incidencia', foreign_keys='Incidencia.creado_por', backref='usuario_creador', overlaps="incidencias_creador")
+    incidencias_asignadas = db.relationship('Incidencia', foreign_keys='Incidencia.tecnico_asignado', backref='usuario_tecnico', overlaps="incidencias_tecnico")
 
 class Rol(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -192,8 +192,8 @@ class Incidencia(db.Model):
     configuracion_imagenes = db.Column(db.Text)  # JSON con configuración de imágenes y collages
     
     # Relaciones
-    tecnico = db.relationship('User', foreign_keys=[tecnico_asignado], backref='incidencias_tecnico', overlaps="incidencias_asignadas,usuario_tecnico")
-    creador = db.relationship('User', foreign_keys=[creado_por], backref='incidencias_creador', overlaps="incidencias_creadas,usuario_creador")
+    tecnico = db.relationship('User', foreign_keys=[tecnico_asignado], backref='incidencias_tecnico', overlaps="incidencias_asignadas")
+    creador = db.relationship('User', foreign_keys=[creado_por], backref='incidencias_creador', overlaps="incidencias_creadas")
     cliente = db.relationship('Cliente', back_populates='incidencias')
     sede = db.relationship('Sede', back_populates='incidencias')
     sistema = db.relationship('Sistema', back_populates='incidencias')
@@ -4118,7 +4118,6 @@ def generar_pdf_formulario(respuesta_formulario):
             print(f"ERROR: No se pudo guardar PDF en R2")
             # Intentar guardar localmente como fallback
             try:
-                from werkzeug.utils import secure_filename
                 local_path = os.path.join('uploads', 'r2_storage', r2_path)
                 os.makedirs(os.path.dirname(local_path), exist_ok=True)
                 with open(local_path, 'wb') as f:
