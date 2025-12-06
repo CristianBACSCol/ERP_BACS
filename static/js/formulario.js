@@ -1012,6 +1012,112 @@ if (formulario) {
     });
 }
 
+// Funciones para registro repetible
+function agregarRegistro(campoId) {
+    const lista = document.getElementById(`registros_${campoId}`);
+    if (!lista) return;
+    
+    const registroIndex = lista.children.length;
+    const registroDiv = document.createElement('div');
+    registroDiv.className = 'registro-item';
+    registroDiv.innerHTML = `
+        <div class="registro-header">
+            <h5>Registro ${registroIndex + 1}</h5>
+            <button type="button" class="btn btn-sm btn-outline-danger eliminar-registro-btn" onclick="eliminarRegistro(this)">
+                <i class="icon-trash"></i> Eliminar
+            </button>
+        </div>
+        <div class="row">
+            <div class="col-md-12">
+                <div class="form-group">
+                    <label class="form-label">Nombre *</label>
+                    <input type="text" name="registro_${campoId}_nombre_${registroIndex}" 
+                           class="form-control" required>
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-md-12">
+                <div class="form-group">
+                    <label class="form-label">Observación *</label>
+                    <textarea name="registro_${campoId}_observacion_${registroIndex}" 
+                              class="form-control" rows="3" required></textarea>
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-md-12">
+                <div class="form-group">
+                    <label class="form-label">Foto (Opcional)</label>
+                    <input type="file" name="registro_${campoId}_foto_${registroIndex}" 
+                           class="form-control registro-foto-input" accept="image/*"
+                           onchange="previewRegistroFoto(this, ${campoId}, ${registroIndex})">
+                    <div class="registro-foto-preview" id="preview_registro_${campoId}_${registroIndex}" style="display: none;">
+                        <img src="" alt="Preview" style="max-width: 200px; max-height: 200px; margin-top: 10px;">
+                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="eliminarPreviewFoto(this)">
+                            <i class="icon-trash"></i> Eliminar Foto
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <hr>
+    `;
+    lista.appendChild(registroDiv);
+}
+
+function eliminarRegistro(button) {
+    const registroItem = button.closest('.registro-item');
+    if (registroItem) {
+        registroItem.remove();
+        // Renumerar los registros restantes
+        actualizarNumeracionRegistros(button.closest('.registro-repetible-container'));
+    }
+}
+
+function actualizarNumeracionRegistros(container) {
+    const lista = container.querySelector('.registros-lista');
+    if (!lista) return;
+    
+    lista.querySelectorAll('.registro-item').forEach((item, index) => {
+        const header = item.querySelector('.registro-header h5');
+        if (header) {
+            header.textContent = `Registro ${index + 1}`;
+        }
+    });
+}
+
+function previewRegistroFoto(input, campoId, registroIndex) {
+    const previewDiv = document.getElementById(`preview_registro_${campoId}_${registroIndex}`);
+    if (!previewDiv) return;
+    
+    const file = input.files[0];
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const img = previewDiv.querySelector('img');
+            if (img) {
+                img.src = e.target.result;
+                previewDiv.style.display = 'block';
+            }
+        };
+        reader.readAsDataURL(file);
+    } else {
+        previewDiv.style.display = 'none';
+    }
+}
+
+function eliminarPreviewFoto(button) {
+    const previewDiv = button.closest('.registro-foto-preview');
+    if (previewDiv) {
+        const input = previewDiv.previousElementSibling;
+        if (input && input.tagName === 'INPUT') {
+            input.value = '';
+        }
+        previewDiv.style.display = 'none';
+    }
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('.firma-btn').forEach(function(btn) {
         btn.addEventListener('click', function() {
@@ -1035,6 +1141,29 @@ document.addEventListener('DOMContentLoaded', function() {
                 limpiarFotos(campoId);
             }
         });
+    });
+    
+    // Inicializar botones de registro repetible
+    document.querySelectorAll('.agregar-registro-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            const campoId = this.getAttribute('data-campo');
+            agregarRegistro(campoId);
+        });
+    });
+    
+    // Si el campo registro_repetible es obligatorio, agregar un registro automáticamente
+    document.querySelectorAll('.registro-repetible-container').forEach(function(container) {
+        const campoId = container.getAttribute('data-campo-id');
+        const campoDiv = container.closest('.campo-formulario');
+        if (campoDiv) {
+            const obligatorio = campoDiv.querySelector('label') && campoDiv.querySelector('label').textContent.includes('*');
+            if (obligatorio) {
+                const lista = container.querySelector('.registros-lista');
+                if (lista && lista.children.length === 0) {
+                    agregarRegistro(campoId);
+                }
+            }
+        }
     });
 });
 

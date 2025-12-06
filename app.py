@@ -218,7 +218,7 @@ class CampoFormulario(db.Model):
     """Modelo para los campos individuales de un formulario"""
     id = db.Column(db.Integer, primary_key=True)
     formulario_id = db.Column(db.Integer, db.ForeignKey('formulario.id'), nullable=False)
-    tipo_campo = db.Column(db.String(50), nullable=False)  # texto, textarea, fecha, seleccion, seleccion_multiple, firma, foto, texto_informativo
+    tipo_campo = db.Column(db.String(50), nullable=False)  # texto, textarea, fecha, seleccion, seleccion_multiple, firma, foto, texto_informativo, registro_repetible
     titulo = db.Column(db.String(200), nullable=False)
     descripcion = db.Column(db.Text)
     obligatorio = db.Column(db.Boolean, default=False)
@@ -2911,6 +2911,89 @@ def diligenciar_formulario(id):
                 elif campo.tipo_campo == 'texto_informativo':
                     # Los campos informativos no tienen respuesta
                     continue
+                elif campo.tipo_campo == 'registro_repetible':
+                    # Procesar registros repetibles (guardar como JSON)
+                    import json
+                    registros_data = []
+                    
+                    # Obtener todos los registros para este campo
+                    registro_index = 0
+                    while True:
+                        nombre_key = f'registro_{campo.id}_nombre_{registro_index}'
+                        observacion_key = f'registro_{campo.id}_observacion_{registro_index}'
+                        foto_key = f'registro_{campo.id}_foto_{registro_index}'
+                        
+                        nombre = request.form.get(nombre_key, '').strip()
+                        observacion = request.form.get(observacion_key, '').strip()
+                        
+                        # Si no hay nombre ni observación, asumir que no hay más registros
+                        if not nombre and not observacion:
+                            break
+                        
+                        # Validar campos obligatorios
+                        if campo.obligatorio:
+                            if not nombre:
+                                flash(f'Error en el campo "{campo.titulo}": El nombre es obligatorio en el registro {registro_index + 1}', 'error')
+                                return redirect(url_for('diligenciar_formulario', id=id))
+                            if not observacion:
+                                flash(f'Error en el campo "{campo.titulo}": La observación es obligatoria en el registro {registro_index + 1}', 'error')
+                                return redirect(url_for('diligenciar_formulario', id=id))
+                        
+                        registro = {
+                            'nombre': nombre,
+                            'observacion': observacion,
+                            'foto': None
+                        }
+                        
+                        # Procesar foto si existe
+                        foto_file = request.files.get(foto_key)
+                        if foto_file and foto_file.filename:
+                            try:
+                                from image_processor import process_image, is_image_allowed
+                                
+                                if not is_image_allowed(foto_file.filename):
+                                    flash(f'Error en el campo "{campo.titulo}": Formato de imagen no permitido en el registro {registro_index + 1}', 'error')
+                                    return redirect(url_for('diligenciar_formulario', id=id))
+                                
+                                # Procesar y optimizar imagen
+                                optimized_image, process_info = process_image(foto_file)
+                                
+                                # Generar nombre único para la foto
+                                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                                foto_filename = f'registro_{campo.id}_{respuesta_formulario.id}_{registro_index}_{timestamp}.jpg'
+                                
+                                # Ruta en R2: Formularios/imagenes/nombre_archivo
+                                r2_path = f'Formularios/imagenes/{foto_filename}'
+                                
+                                # Subir a R2
+                                if upload_file_to_r2(optimized_image, r2_path, content_type='image/jpeg'):
+                                    registro['foto'] = foto_filename
+                                    print(f"DEBUG: Foto de registro subida a R2: {r2_path}")
+                                else:
+                                    print(f"WARNING: No se pudo subir foto de registro a R2, guardando como base64")
+                                    # Fallback: guardar como base64 (limitado)
+                                    optimized_image.seek(0)
+                                    import base64
+                                    foto_base64 = base64.b64encode(optimized_image.read()).decode('utf-8')
+                                    if len(foto_base64) > 50000:  # Si es muy grande, truncar
+                                        foto_base64 = foto_base64[:50000] + "... [TRUNCADO]"
+                                    registro['foto'] = f'data:image/jpeg;base64,{foto_base64}'
+                            except Exception as foto_error:
+                                print(f"ERROR procesando foto de registro: {foto_error}")
+                                import traceback
+                                traceback.print_exc()
+                                # Continuar sin foto si hay error
+                        
+                        registros_data.append(registro)
+                        registro_index += 1
+                    
+                    # Validar que haya al menos un registro si es obligatorio
+                    if campo.obligatorio and len(registros_data) == 0:
+                        flash(f'Error en el campo "{campo.titulo}": Debe agregar al menos un registro', 'error')
+                        return redirect(url_for('diligenciar_formulario', id=id))
+                    
+                    # Guardar como JSON
+                    respuesta_campo.valor_json = json.dumps(registros_data, ensure_ascii=False)
                 
                 db.session.add(respuesta_campo)
                 campos_procesados += 1
@@ -4131,6 +4214,28 @@ def generar_pdf_formulario(respuesta_formulario):
                         valor = "Error en firma"
                 else:
                     valor = "Sin firma"
+            elif campo.tipo_campo == 'registro_repetible':
+                if respuesta_campo.valor_json:
+                    try:
+                        import json
+                        registros = json.loads(respuesta_campo.valor_json)
+                        if registros:
+                            valor_html = f"<b>{len(registros)} registro(s):</b><br/>"
+                            for idx, registro in enumerate(registros, 1):
+                                valor_html += f"<b>Registro {idx}:</b><br/>"
+                                valor_html += f"• <b>Nombre:</b> {registro.get('nombre', 'N/A')}<br/>"
+                                valor_html += f"• <b>Observación:</b> {registro.get('observacion', 'N/A')}<br/>"
+                                if registro.get('foto'):
+                                    valor_html += f"• <b>Foto:</b> Adjunta<br/>"
+                                valor_html += "<br/>"
+                            valor = valor_html
+                        else:
+                            valor = "No hay registros"
+                    except Exception as e:
+                        print(f"ERROR procesando registros repetibles en PDF: {e}")
+                        valor = "Error al procesar registros"
+                else:
+                    valor = "No hay registros"
             elif campo.tipo_campo == 'foto':
                 if respuesta_campo.valor_archivo:
                     fotos_list = respuesta_campo.valor_archivo.split(',')

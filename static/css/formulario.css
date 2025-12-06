@@ -235,3 +235,54 @@ select.form-control, .menu-select, .form-control {
     }
 }
 
+/* Estilos para registro repetible */
+.registro-repetible-container {
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    padding: 20px;
+    background: #f8f9fa;
+    margin-bottom: 20px;
+}
+
+.registros-lista {
+    margin-bottom: 15px;
+}
+
+.registro-item {
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 15px;
+}
+
+.registro-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.registro-header h5 {
+    margin: 0;
+    color: #2c3e50;
+}
+
+.registro-foto-preview {
+    margin-top: 10px;
+    padding: 10px;
+    background: #f8f9fa;
+    border-radius: 4px;
+}
+
+.registro-foto-preview img {
+    display: block;
+    margin-bottom: 10px;
+}
+
+.agregar-registro-btn {
+    margin-top: 10px;
+}
+

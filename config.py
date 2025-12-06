@@ -16,12 +16,13 @@ class Config:
     
     # Detectar si se usa Supabase (PostgreSQL) o MySQL
     # Si hay una URL de Supabase o el puerto es 5432/6543 (PostgreSQL), usar PostgreSQL
+    # Si el host es localhost y el puerto es 3306, usar MySQL (desarrollo local)
     SUPABASE_DB_URL_ENV = os.environ.get('SUPABASE_DB_URL', '').strip() if os.environ.get('SUPABASE_DB_URL') else None
     USE_POSTGRESQL = (
         (SUPABASE_DB_URL_ENV is not None and SUPABASE_DB_URL_ENV) or 
-        DB_PORT in ['5432', '6543'] or
-        'supabase' in DB_HOST.lower() or
-        'postgres' in DB_NAME.lower()
+        (DB_PORT in ['5432', '6543'] and DB_HOST != 'localhost') or
+        ('supabase' in DB_HOST.lower() and DB_HOST != 'localhost') or
+        ('postgres' in DB_NAME.lower() and DB_HOST != 'localhost')
     )
     
     if USE_POSTGRESQL:

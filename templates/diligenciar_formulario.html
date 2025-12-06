@@ -227,6 +227,23 @@
                     {% if campo.descripcion %}
                     <small class="form-text">{{ campo.descripcion }}</small>
                     {% endif %}
+                
+                {% elif campo.tipo_campo == 'registro_repetible' %}
+                    <!-- Campo de registro repetible -->
+                    <label class="form-label">
+                        {{ campo.titulo }}{% if campo.obligatorio %} *{% endif %}
+                    </label>
+                    <div class="registro-repetible-container" data-campo-id="{{ campo.id }}">
+                        <div class="registros-lista" id="registros_{{ campo.id }}">
+                            <!-- Los registros se agregarán dinámicamente aquí -->
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-primary agregar-registro-btn" data-campo="{{ campo.id }}">
+                            <i class="icon-plus"></i> Agregar Registro
+                        </button>
+                    </div>
+                    {% if campo.descripcion %}
+                    <small class="form-text">{{ campo.descripcion }}</small>
+                    {% endif %}
                 {% endif %}
             </div>
             {% endfor %}
