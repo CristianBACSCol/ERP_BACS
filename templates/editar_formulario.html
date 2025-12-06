@@ -165,9 +165,9 @@
                         <!-- Para registro repetible: configuración de campos -->
                         <div id="configuracionRegistroRepetible" style="display: none;">
                             <div class="form-group">
-                                <label class="form-label">Campos del Registro</label>
-                                <p class="text-muted">Define los campos que tendrá cada registro repetible</p>
-                                <div id="camposRegistroContainer">
+                                <label class="form-label"><strong>Campos del Registro</strong></label>
+                                <p class="text-muted">Define los campos que tendrá cada registro repetible. Ejemplo: Nombre (texto, obligatorio), Cédula (texto, obligatorio), Foto (foto, opcional)</p>
+                                <div id="camposRegistroContainer" style="margin-bottom: 15px;">
                                     <!-- Los campos se agregarán dinámicamente aquí -->
                                 </div>
                                 <button type="button" class="btn btn-sm btn-outline-primary" onclick="agregarCampoRegistro()">
@@ -435,6 +435,12 @@ function mostrarModalAgregarCampo() {
     document.getElementById('campoForm').reset();
     document.getElementById('configuracionEspecifica').style.display = 'none';
     
+    // Limpiar contenedor de campos de registro repetible
+    const camposRegistroContainer = document.getElementById('camposRegistroContainer');
+    if (camposRegistroContainer) {
+        camposRegistroContainer.innerHTML = '';
+    }
+    
     const modal = document.getElementById('campoModal');
     modal.style.display = 'flex'; // Usar flex para centrar correctamente
     
@@ -597,11 +603,27 @@ function cambiarTipoCampo() {
         configuracion.style.display = 'block';
         validacionTexto.style.display = 'block';
     } else if (tipo === 'registro_repetible') {
-        configuracion.style.display = 'block';
-        configuracionRegistroRepetible.style.display = 'block';
-        // Si no hay campos, agregar uno por defecto
-        if (document.getElementById('camposRegistroContainer').children.length === 0) {
-            agregarCampoRegistro();
+        console.log('DEBUG: Seleccionado registro_repetible, mostrando configuración...');
+        if (configuracion) {
+            configuracion.style.display = 'block';
+            console.log('DEBUG: configuracionEspecifica mostrado');
+        }
+        if (configuracionRegistroRepetible) {
+            configuracionRegistroRepetible.style.display = 'block';
+            console.log('DEBUG: configuracionRegistroRepetible mostrado');
+            // Si no hay campos, agregar uno por defecto
+            const camposContainer = document.getElementById('camposRegistroContainer');
+            if (camposContainer) {
+                console.log('DEBUG: camposRegistroContainer encontrado, cantidad de hijos:', camposContainer.children.length);
+                if (camposContainer.children.length === 0) {
+                    console.log('DEBUG: Agregando campo por defecto...');
+                    agregarCampoRegistro();
+                }
+            } else {
+                console.error('ERROR: No se encontró camposRegistroContainer');
+            }
+        } else {
+            console.error('ERROR: No se encontró el elemento configuracionRegistroRepetible');
         }
     } else if (tipo === 'texto_informativo') {
         configuracion.style.display = 'none';
