@@ -444,18 +444,19 @@ function mostrarModalAgregarCampo() {
     const modal = document.getElementById('campoModal');
     modal.style.display = 'flex'; // Usar flex para centrar correctamente
     
-    // Prevenir scroll del body cuando el modal está abierto
-    const scrollY = window.scrollY;
-    document.body.style.position = 'fixed';
-    document.body.style.top = `-${scrollY}px`;
-    document.body.style.width = '100%';
-    document.body.style.overflow = 'hidden';
-    
     // Guardar la posición del scroll para restaurarla después
+    const scrollY = window.scrollY;
     modal.dataset.scrollY = scrollY;
     
-    // Scroll al inicio del modal
-    modal.scrollTop = 0;
+    // NO bloquear el scroll del body, permitir que el modal maneje su propio scroll
+    // Solo prevenir el scroll del body cuando el modal está abierto
+    document.body.style.overflow = 'hidden';
+    
+    // Scroll al inicio del modal body
+    const modalBody = modal.querySelector('.modal-body');
+    if (modalBody) {
+        modalBody.scrollTop = 0;
+    }
 }
 
 function editarCampo(campoId) {
@@ -522,18 +523,19 @@ function editarCampo(campoId) {
     const modal = document.getElementById('campoModal');
     modal.style.display = 'flex'; // Usar flex para centrar correctamente
     
-    // Prevenir scroll del body cuando el modal está abierto
-    const scrollY = window.scrollY;
-    document.body.style.position = 'fixed';
-    document.body.style.top = `-${scrollY}px`;
-    document.body.style.width = '100%';
-    document.body.style.overflow = 'hidden';
-    
     // Guardar la posición del scroll para restaurarla después
+    const scrollY = window.scrollY;
     modal.dataset.scrollY = scrollY;
     
-    // Scroll al inicio del modal
-    modal.scrollTop = 0;
+    // NO bloquear el scroll del body, permitir que el modal maneje su propio scroll
+    // Solo prevenir el scroll del body cuando el modal está abierto
+    document.body.style.overflow = 'hidden';
+    
+    // Scroll al inicio del modal body
+    const modalBody = modal.querySelector('.modal-body');
+    if (modalBody) {
+        modalBody.scrollTop = 0;
+    }
 }
 
 function eliminarCampo(campoId) {
@@ -544,18 +546,8 @@ function eliminarCampo(campoId) {
     const modal = document.getElementById('confirmModal');
     modal.style.display = 'flex'; // Usar flex para centrar correctamente
     
-    // Prevenir scroll del body cuando el modal está abierto
-    const scrollY = window.scrollY;
-    document.body.style.position = 'fixed';
-    document.body.style.top = `-${scrollY}px`;
-    document.body.style.width = '100%';
+    // Solo prevenir el scroll del body cuando el modal está abierto
     document.body.style.overflow = 'hidden';
-    
-    // Guardar la posición del scroll para restaurarla después
-    modal.dataset.scrollY = scrollY;
-    
-    // Scroll al inicio del modal
-    modal.scrollTop = 0;
 }
 
 function eliminarCampoConfirmado(campoId) {
@@ -956,12 +948,7 @@ function cerrarModalCampo() {
     modal.style.display = 'none';
     
     // Restaurar scroll del body
-    const scrollY = modal.dataset.scrollY || 0;
-    document.body.style.position = '';
-    document.body.style.top = '';
-    document.body.style.width = '';
     document.body.style.overflow = '';
-    window.scrollTo(0, parseInt(scrollY || 0));
 }
 
 function cerrarModalConfirmacion() {
@@ -969,12 +956,7 @@ function cerrarModalConfirmacion() {
     modal.style.display = 'none';
     
     // Restaurar scroll del body
-    const scrollY = modal.dataset.scrollY || 0;
-    document.body.style.position = '';
-    document.body.style.top = '';
-    document.body.style.width = '';
     document.body.style.overflow = '';
-    window.scrollTo(0, parseInt(scrollY || 0));
 }
 
 // Cerrar modales con tecla Escape
