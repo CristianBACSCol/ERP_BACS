@@ -444,13 +444,8 @@ function mostrarModalAgregarCampo() {
     const modal = document.getElementById('campoModal');
     modal.style.display = 'flex';
     
-    // Bloquear scroll del body cuando el modal está abierto
-    const scrollY = window.scrollY;
-    document.body.style.position = 'fixed';
-    document.body.style.top = `-${scrollY}px`;
-    document.body.style.width = '100%';
+    // Bloquear scroll del body (solo fondo, no el modal)
     document.body.style.overflow = 'hidden';
-    modal.dataset.scrollY = scrollY;
     
     // Scroll al inicio del modal body
     const modalBody = modal.querySelector('.modal-body');
@@ -523,13 +518,8 @@ function editarCampo(campoId) {
     const modal = document.getElementById('campoModal');
     modal.style.display = 'flex';
     
-    // Bloquear scroll del body cuando el modal está abierto
-    const scrollY = window.scrollY;
-    document.body.style.position = 'fixed';
-    document.body.style.top = `-${scrollY}px`;
-    document.body.style.width = '100%';
+    // Bloquear scroll del body (solo fondo, no el modal)
     document.body.style.overflow = 'hidden';
-    modal.dataset.scrollY = scrollY;
     
     // Scroll al inicio del modal body
     const modalBody = modal.querySelector('.modal-body');
@@ -544,9 +534,9 @@ function eliminarCampo(campoId) {
     };
     
     const modal = document.getElementById('confirmModal');
-    modal.style.display = 'flex'; // Usar flex para centrar correctamente
+    modal.style.display = 'flex';
     
-    // Solo prevenir el scroll del body cuando el modal está abierto
+    // Bloquear scroll del body (solo fondo, no el modal)
     document.body.style.overflow = 'hidden';
 }
 
@@ -948,12 +938,7 @@ function cerrarModalCampo() {
     modal.style.display = 'none';
     
     // Restaurar scroll del body
-    const scrollY = modal.dataset.scrollY || 0;
-    document.body.style.position = '';
-    document.body.style.top = '';
-    document.body.style.width = '';
     document.body.style.overflow = '';
-    window.scrollTo(0, parseInt(scrollY));
 }
 
 function cerrarModalConfirmacion() {
