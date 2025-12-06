@@ -3029,15 +3029,30 @@ def descargar_formulario_pdf_file(id):
                 db.session.commit()
                 print(f"DEBUG: PDF regenerado exitosamente: {pdf_path}")
             else:
-                print(f"ERROR: No se pudo regenerar el PDF")
-                flash('No se pudo generar el PDF. Por favor, verifica la configuración de R2.', 'error')
-                return redirect(url_for('formularios'))
+                print(f"ERROR: No se pudo regenerar el PDF (retornó None)")
+                print(f"ERROR: Esto significa que R2 no está configurado o la subida falló")
+                # Retornar error HTTP en lugar de redirect
+                from flask import Response  # type: ignore
+                error_response = Response(
+                    'No se pudo generar el PDF. Por favor, verifica la configuración de R2.',
+                    status=503,
+                    mimetype='text/plain',
+                    headers={'Content-Type': 'text/plain; charset=utf-8'}
+                )
+                return error_response
         except Exception as regen_error:
             print(f"ERROR: Excepción al regenerar PDF: {regen_error}")
             import traceback
             traceback.print_exc()
-            flash('No se pudo generar el PDF. Por favor, verifica la configuración de R2.', 'error')
-            return redirect(url_for('formularios'))
+            # Retornar error HTTP en lugar de redirect
+            from flask import Response  # type: ignore
+            error_response = Response(
+                f'Error al generar el PDF: {str(regen_error)}',
+                status=500,
+                mimetype='text/plain',
+                headers={'Content-Type': 'text/plain; charset=utf-8'}
+            )
+            return error_response
     
     # Buscar el archivo en R2: Formularios/nombredelformulario/nombredeldocumento.pdf
     formulario_nombre = secure_filename(respuesta_formulario.formulario.nombre)

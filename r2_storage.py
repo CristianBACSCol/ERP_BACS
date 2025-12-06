@@ -24,10 +24,23 @@ def get_r2_client():
         return None
     
     # Validar formato de credenciales solo si están configuradas
-    if access_key_id == 'tu_access_key_id' or (access_key_id and len(access_key_id) != 32):
+    # Verificar que no sean valores de ejemplo o vacíos
+    if not access_key_id or access_key_id.strip() == '' or access_key_id == 'tu_access_key_id_aqui' or access_key_id == 'tu_access_key_id':
+        print(f"DEBUG: R2_ACCESS_KEY_ID no está configurado o es un valor de ejemplo")
         return None
     
-    if secret_access_key == 'tu_secret_access_key' or (secret_access_key and len(secret_access_key) != 64):
+    if not secret_access_key or secret_access_key.strip() == '' or secret_access_key == 'tu_secret_access_key_aqui' or secret_access_key == 'tu_secret_access_key':
+        print(f"DEBUG: R2_SECRET_ACCESS_KEY no está configurado o es un valor de ejemplo")
+        return None
+    
+    # Las credenciales de R2 pueden tener diferentes longitudes dependiendo del tipo
+    # No validar longitud estricta, solo que no estén vacías
+    if len(access_key_id.strip()) < 10:
+        print(f"DEBUG: R2_ACCESS_KEY_ID parece ser demasiado corto (longitud: {len(access_key_id)})")
+        return None
+    
+    if len(secret_access_key.strip()) < 20:
+        print(f"DEBUG: R2_SECRET_ACCESS_KEY parece ser demasiado corto (longitud: {len(secret_access_key)})")
         return None
     
     s3_config = Config(
@@ -95,21 +108,35 @@ def upload_file_to_r2(file_data, r2_path, content_type=None):
         
         # Subir a R2
         try:
+            # Obtener credenciales para logging
+            endpoint_url = os.environ.get('R2_ENDPOINT_URL', 'N/A')
+            access_key_id = os.environ.get('R2_ACCESS_KEY_ID', 'N/A')
+            
             print(f"DEBUG: Subiendo archivo a R2 - Bucket: {bucket_name}, Key: {r2_path}, Tamaño: {len(body)} bytes")
-            s3_client.put_object(
+            print(f"DEBUG: Endpoint URL: {endpoint_url}")
+            if access_key_id != 'N/A' and len(access_key_id) >= 8:
+                print(f"DEBUG: Access Key ID: {access_key_id[:8]}...")
+            
+            response = s3_client.put_object(
                 Bucket=bucket_name,
                 Key=r2_path,
                 Body=body,
                 ContentType=content_type
             )
             print(f"DEBUG: ✅ Archivo subido exitosamente a R2: {r2_path}")
+            print(f"DEBUG: Response ETag: {response.get('ETag', 'N/A')}")
             
             # Verificar que el archivo se subió correctamente
             try:
-                s3_client.head_object(Bucket=bucket_name, Key=r2_path)
+                head_response = s3_client.head_object(Bucket=bucket_name, Key=r2_path)
                 print(f"DEBUG: ✅ Verificación: Archivo confirmado en R2: {r2_path}")
+                print(f"DEBUG: Tamaño verificado: {head_response.get('ContentLength', 'N/A')} bytes")
             except Exception as verify_error:
                 print(f"ERROR: ⚠️ No se pudo verificar archivo en R2: {verify_error}")
+                import traceback
+                traceback.print_exc()
+                # Aún así retornar True si la subida fue exitosa
+                print(f"WARNING: La subida parece exitosa pero la verificación falló")
             
             return True
         except Exception as upload_error:

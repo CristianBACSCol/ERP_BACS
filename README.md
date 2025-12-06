@@ -4,6 +4,32 @@
 
 El ERP BACS es un sistema de gestión empresarial desarrollado específicamente para la empresa BACS (Building Automation and Control System SAS). Este sistema permite la gestión integral de incidencias técnicas, clientes, usuarios, sedes y sistemas, proporcionando una plataforma centralizada para el seguimiento y resolución de problemas técnicos.
 
+## 🛠️ Stack Tecnológico
+
+| Categoría | Tecnología | Versión | Uso en el Proyecto |
+|-----------|-----------|---------|-------------------|
+| **Backend** | Python | 3.8+ | Lenguaje principal del servidor |
+| **Backend** | Flask | 2.3.3 | Framework web para APIs y rutas |
+| **Backend** | SQLAlchemy | 3.0.5 | ORM para interacción con base de datos |
+| **Backend** | psycopg2-binary | 2.9.9+ | Driver de PostgreSQL para Python |
+| **Backend** | ReportLab | 4.0.4 | Generación de PDFs (formularios e informes) |
+| **Backend** | Pillow (PIL) | 11.3.0 | Procesamiento y optimización de imágenes |
+| **Backend** | pillow-heif | - | Soporte para formato HEIC/HEIF (fotos iPhone) |
+| **Backend** | boto3 | - | Cliente S3 para Cloudflare R2 |
+| **Backend** | Werkzeug | - | Utilidades de seguridad (hashing de contraseñas) |
+| **Frontend** | HTML5 | - | Estructura de páginas web |
+| **Frontend** | CSS3 | - | Estilos y diseño responsive |
+| **Frontend** | JavaScript (Vanilla) | - | Interactividad, validaciones, firmas digitales |
+| **Frontend** | Canvas API | - | Captura de firmas digitales (mouse y táctil) |
+| **Base de Datos** | PostgreSQL | - | Base de datos relacional (a través de Supabase) |
+| **Base de Datos** | Supabase | - | Plataforma PostgreSQL como servicio (hosting y gestión) |
+| **Almacenamiento** | Cloudflare R2 | - | Almacenamiento de objetos (imágenes, PDFs, firmas) |
+| **Almacenamiento** | Sistema de archivos local | - | Fallback para desarrollo local |
+| **Despliegue** | Vercel | - | Plataforma serverless para hosting |
+| **Despliegue** | Vercel Serverless Functions | - | Ejecución de la aplicación Flask |
+| **Herramientas** | Git | - | Control de versiones |
+| **Herramientas** | dotenv | - | Gestión de variables de entorno |
+
 ## 🏗️ Arquitectura del Sistema
 
 - **Base de Datos**: Supabase (PostgreSQL) - Almacena todos los datos SQL (usuarios, clientes, formularios, incidencias, etc.)
@@ -46,24 +72,13 @@ Crea un archivo `.env` en la raíz del proyecto. Puedes usar `env.local.example`
 # Obtén estos valores de: Supabase Dashboard > Settings > Database > Connection string
 
 # Opción 1: Session Pooler (RECOMENDADO - compatible con IPv4)
-# Ve a: Supabase Dashboard > Settings > Database > Connection string
-# Selecciona "Session mode" y copia la URL
 DB_HOST=aws-0-us-west-2.pooler.supabase.com
 DB_PORT=5432
 DB_USER=postgres.tu_proyecto
 DB_PASSWORD=tu_contraseña_supabase
 DB_NAME=postgres
 
-# Opción 2: Transaction Pooler (alternativa)
-# Selecciona "Transaction mode" en Supabase Dashboard
-# DB_HOST=aws-0-us-west-2.pooler.supabase.com
-# DB_PORT=5432
-# DB_USER=postgres.tu_proyecto
-# DB_PASSWORD=tu_contraseña_supabase
-# DB_NAME=postgres
-
 # URL de conexión Session Pooler (RECOMENDADO - compatible IPv4)
-# Obtén esta URL de: Supabase Dashboard > Connection string > Session mode
 SUPABASE_DB_URL=postgresql://postgres.tu_proyecto:tu_contraseña@aws-0-us-west-2.pooler.supabase.com:5432/postgres
 
 # Configuración de la aplicación
@@ -76,10 +91,11 @@ INITIAL_USER_EMAIL=admin@tuempresa.com
 INITIAL_USER_PASSWORD=tu_contraseña_segura_aqui
 
 # Cloudflare R2 (almacenamiento de archivos)
-# Deja vacío para desarrollo local (usará almacenamiento local)
-R2_ENDPOINT_URL=
-R2_ACCESS_KEY_ID=
-R2_SECRET_ACCESS_KEY=
+# IMPORTANTE: Usa los "Tokens de API de cuenta" (Account API Tokens), NO los de usuario
+# Obtén estos valores de: Cloudflare Dashboard > R2 > Manage R2 API Tokens
+R2_ENDPOINT_URL=https://e0ddac0321b698a6696551a5287e5392.r2.cloudflarestorage.com
+R2_ACCESS_KEY_ID=tu_access_key_id_aqui
+R2_SECRET_ACCESS_KEY=tu_secret_access_key_aqui
 R2_BUCKET_NAME=erp-bacs
 ```
 
@@ -94,9 +110,28 @@ R2_BUCKET_NAME=erp-bacs
 5. Copia la URL completa que aparece
 6. Configura las variables en tu `.env`
 
-**💡 Recomendación**: Usa **Session Pooler** (puerto 6543) - es compatible con IPv4 y funciona en Vercel.
+**💡 Recomendación**: Usa **Session Pooler** (puerto 5432) - es compatible con IPv4 y funciona en Vercel.
 
-#### 4. Migración de Base de Datos
+#### 4. Configurar Cloudflare R2
+
+1. Ve a [Cloudflare Dashboard](https://dash.cloudflare.com) → **R2**
+2. Haz clic en **"Manage R2 API Tokens"** → **"Create API Token"**
+3. Configura:
+   - **Token Name**: "ERP BACS Production"
+   - **Permissions**: "Object Read & Write" o "Admin Read & Write"
+4. Copia el **Access Key ID** y **Secret Access Key** (solo se muestra una vez)
+5. Crea un bucket llamado `erp-bacs` si no existe
+6. Agrega las credenciales a tu `.env`:
+   ```env
+   R2_ENDPOINT_URL=https://e0ddac0321b698a6696551a5287e5392.r2.cloudflarestorage.com
+   R2_ACCESS_KEY_ID=tu_access_key_id
+   R2_SECRET_ACCESS_KEY=tu_secret_access_key
+   R2_BUCKET_NAME=erp-bacs
+   ```
+
+**⚠️ IMPORTANTE**: Usa los **"Tokens de API de cuenta"** (Account API Tokens), NO los de usuario.
+
+#### 5. Migración de Base de Datos
 
 **Si tienes un backup SQL previo** (archivo `erp_bacs (1).sql`):
 
@@ -133,7 +168,7 @@ python migrar.py migrar-campo
 python migrar.py todo
 ```
 
-#### 5. Ejecutar Aplicación
+#### 6. Ejecutar Aplicación
 
 ```bash
 python ejecutar_app.py
@@ -244,35 +279,13 @@ El sistema optimiza automáticamente las imágenes:
 - ✅ Campos de texto, fechas, selección
 - ✅ Generación automática de PDFs
 - ✅ Datos del firmante incluidos en PDFs
-- ✅ **Limpieza automática**: Imágenes y firmas se eliminan 5 segundos después de generar PDF
+- ✅ **Limpieza automática**: Imágenes y firmas se eliminan después de generar PDF
 - ✅ **Solo PDFs permanecen**: Solo se mantienen los PDFs en la carpeta del formulario
 
 ### Generación de Informes
 - Informes estructurados en PDF
 - Plantillas personalizables
 - Exportación de datos
-
-## 🛠️ Tecnologías
-
-### Backend
-- **Python 3.8+** - Lenguaje principal
-- **Flask 2.3.3** - Framework web
-- **SQLAlchemy 3.0.5** - ORM para base de datos
-- **PostgreSQL (Supabase)** - Base de datos relacional
-- **psycopg2-binary** - Driver de PostgreSQL
-- **ReportLab 4.0.4** - Generación de PDFs
-- **Pillow 11.3.0** - Procesamiento de imágenes
-- **pillow-heif** - Soporte para formato HEIC
-
-### Frontend
-- **HTML5 + CSS3 + JavaScript** - Interfaz de usuario
-- **Canvas API** - Firmas digitales
-- **Responsive Design** - Adaptable a móviles
-
-### Almacenamiento y Base de Datos
-- **Supabase (PostgreSQL)** - Base de datos SQL (usuarios, clientes, formularios, etc.)
-- **Cloudflare R2** - Almacenamiento de archivos (imágenes, PDFs, firmas)
-- **Sistema de archivos local** - Almacenamiento en desarrollo (cuando R2 no está configurado)
 
 ## 📁 Estructura del Proyecto
 
@@ -281,8 +294,9 @@ erp_bacs/
 ├── app.py                     # Aplicación principal Flask
 ├── config.py                  # Configuración del sistema
 ├── r2_storage.py              # Utilidades para Cloudflare R2
+├── image_processor.py         # Procesamiento y optimización de imágenes
 ├── ejecutar_app.py            # Script de ejecución
-├── migrar.py                  # Script unificado de migración (consolida todas las migraciones)
+├── migrar.py                  # Script unificado de migración
 ├── requirements.txt           # Dependencias Python
 ├── vercel.json                # Configuración de Vercel
 ├── env.local.example          # Ejemplo de configuración local
@@ -290,8 +304,8 @@ erp_bacs/
 ├── api/
 │   └── index.py               # Handler para Vercel
 ├── static/
-│   └── css/
-│       └── style.css          # Estilos principales
+│   ├── css/                   # Estilos CSS
+│   └── js/                    # Scripts JavaScript
 ├── templates/                 # Plantillas HTML
 └── uploads/                   # Archivos subidos (local)
     └── r2_storage/            # Almacenamiento local (modo desarrollo)
@@ -325,7 +339,7 @@ pip install pillow-heif
 ### Error: "Database connection failed" o "Could not connect to Supabase"
 - Verifica que las credenciales de Supabase en `.env` sean correctas
 - **IMPORTANTE**: La conexión directa solo funciona con IPv6
-- **Para redes IPv4** (la mayoría): Usa **Session Pooler** (puerto `6543`, usuario `postgres.tu_proyecto`)
+- **Para redes IPv4** (la mayoría): Usa **Session Pooler** (puerto `5432`, usuario `postgres.tu_proyecto`)
 - Verifica que tu IP esté permitida en Supabase (Settings → Database → Connection Pooling)
 - Prueba usar `SUPABASE_DB_URL` con la URL completa de Supabase Dashboard
 
@@ -335,7 +349,7 @@ pip install pillow-heif
   1. Ve a Supabase Dashboard > Settings > Database > Connection string
   2. Selecciona **"Session mode"** o **"Transaction mode"** (no "Direct connection")
   3. Copia la URL completa y úsala como `SUPABASE_DB_URL`
-  4. O configura: `DB_PORT=6543` y `DB_USER=postgres.tu_proyecto` en tu `.env`
+  4. O configura: `DB_PORT=5432` y `DB_USER=postgres.tu_proyecto` en tu `.env`
 
 ### Error: "Tenant or user not found"
 - Este error generalmente ocurre cuando tu IP no está permitida en Supabase
@@ -356,6 +370,7 @@ pip install psycopg2-binary
 ### Error: "Las credenciales de R2 no están configuradas"
 - **Local**: Es normal, el sistema usará almacenamiento local en `uploads/r2_storage/`
 - **Producción**: Verifica que las variables de entorno estén configuradas en Vercel
+- **Prueba local**: Verifica que las variables de entorno estén configuradas correctamente en tu `.env`
 
 ### Error: "Duplicate key" o "Unique constraint violation"
 - Esto es normal si ejecutas la migración múltiples veces
@@ -414,9 +429,7 @@ pip list
 
 4. **Producción**: En producción (Vercel), tanto Supabase como Cloudflare R2 deben estar configurados correctamente.
 
-## 📞 Soporte
-
-Para soporte técnico o consultas sobre el sistema, contacta al equipo de desarrollo de BACS.
+5. **Limpieza Automática**: Las imágenes y firmas se eliminan automáticamente después de generar el PDF. Solo los PDFs se mantienen en R2.
 
 ---
 
