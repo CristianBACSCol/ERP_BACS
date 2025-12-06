@@ -3046,8 +3046,16 @@ def descargar_formulario_pdf_file(id):
     temp_file = None
     
     # Intentar descargar de R2 primero
+    print(f"DEBUG: Buscando PDF en R2: {r2_path}")
     if file_exists_in_r2(r2_path):
+        print(f"DEBUG: PDF encontrado en R2, descargando...")
         temp_file = download_to_temp_file(r2_path)
+        if temp_file:
+            print(f"DEBUG: PDF descargado exitosamente: {temp_file}")
+        else:
+            print(f"ERROR: No se pudo descargar el PDF de R2")
+    else:
+        print(f"DEBUG: PDF no encontrado en R2: {r2_path}")
     
     # Si no está en R2, buscar en /tmp (fallback para Vercel)
     if not temp_file:
@@ -3093,22 +3101,86 @@ def descargar_formulario_pdf_file(id):
             traceback.print_exc()
     
     if not temp_file:
-        # Si aún no se encuentra después de intentar regenerar, mostrar error
-        print(f"ERROR: PDF no disponible después de intentar regenerar")
-        flash('El PDF no está disponible. Por favor, contacta al administrador o verifica la configuración de R2.', 'error')
-        return redirect(url_for('formularios'))
+        # Si aún no se encuentra después de intentar regenerar, generar y servir directamente desde memoria
+        print(f"WARNING: PDF no disponible en R2. Generando y sirviendo directamente desde memoria...")
+        try:
+            # Generar PDF directamente en memoria y servirlo sin guardar
+            from io import BytesIO
+            buffer = BytesIO()
+            
+            # Llamar a la función de generación pero capturar el buffer directamente
+            # Necesitamos modificar generar_pdf_formulario para que pueda retornar el buffer
+            # Por ahora, regeneramos el PDF completo
+            pdf_path = generar_pdf_formulario(respuesta_formulario)
+            
+            if pdf_path:
+                # Intentar descargar de R2 una vez más
+                r2_path = f'Formularios/{formulario_nombre}/{pdf_path}'
+                if file_exists_in_r2(r2_path):
+                    temp_file = download_to_temp_file(r2_path)
+                    if temp_file and os.path.exists(temp_file) and os.path.getsize(temp_file) > 0:
+                        print(f"DEBUG: PDF regenerado y descargado exitosamente de R2")
+                    else:
+                        temp_file = None
+                
+                # Si aún no está disponible, el PDF se generó pero no se pudo guardar/descargar
+                # Esto significa que R2 no está configurado correctamente
+                if not temp_file:
+                    print(f"ERROR: PDF generado pero no disponible en R2. R2 no está configurado correctamente.")
+                    from flask import Response  # type: ignore
+                    error_response = Response(
+                        'El PDF se generó pero no se pudo guardar. Por favor, configura R2 correctamente.',
+                        status=503,
+                        mimetype='text/plain',
+                        headers={'Content-Type': 'text/plain; charset=utf-8'}
+                    )
+                    return error_response
+            else:
+                print(f"ERROR: No se pudo generar el PDF")
+                from flask import Response  # type: ignore
+                error_response = Response(
+                    'No se pudo generar el PDF. Por favor, contacta al administrador.',
+                    status=500,
+                    mimetype='text/plain',
+                    headers={'Content-Type': 'text/plain; charset=utf-8'}
+                )
+                return error_response
+        except Exception as direct_error:
+            print(f"ERROR: Excepción al generar PDF directamente: {direct_error}")
+            import traceback
+            traceback.print_exc()
+            from flask import Response  # type: ignore
+            error_response = Response(
+                'Error al generar el PDF. Por favor, contacta al administrador.',
+                status=500,
+                mimetype='text/plain',
+                headers={'Content-Type': 'text/plain; charset=utf-8'}
+            )
+            return error_response
     
     # Verificar que el archivo temporal existe y tiene contenido
     if not os.path.exists(temp_file):
         print(f"ERROR: Archivo temporal no existe: {temp_file}")
-        flash('El PDF no está disponible. Por favor, contacta al administrador.', 'error')
-        return redirect(url_for('formularios'))
+        from flask import Response  # type: ignore
+        error_response = Response(
+            'El PDF no está disponible. Por favor, contacta al administrador.',
+            status=404,
+            mimetype='text/plain',
+            headers={'Content-Type': 'text/plain; charset=utf-8'}
+        )
+        return error_response
     
     file_size = os.path.getsize(temp_file)
     if file_size == 0:
         print(f"ERROR: Archivo temporal está vacío: {temp_file}")
-        flash('El PDF está corrupto. Por favor, intenta regenerarlo.', 'error')
-        return redirect(url_for('formularios'))
+        from flask import Response  # type: ignore
+        error_response = Response(
+            'El PDF está corrupto. Por favor, intenta regenerarlo.',
+            status=500,
+            mimetype='text/plain',
+            headers={'Content-Type': 'text/plain; charset=utf-8'}
+        )
+        return error_response
     
     print(f"DEBUG: PDF descargado de R2 temporalmente para servir: {file_size} bytes")
     
@@ -3119,8 +3191,14 @@ def descargar_formulario_pdf_file(id):
         
         if len(pdf_data) == 0:
             print(f"ERROR: Archivo PDF está vacío después de leer")
-            flash('El PDF está corrupto. Por favor, intenta regenerarlo.', 'error')
-            return redirect(url_for('formularios'))
+            from flask import Response  # type: ignore
+            error_response = Response(
+                'El PDF está corrupto. Por favor, intenta regenerarlo.',
+                status=500,
+                mimetype='text/plain',
+                headers={'Content-Type': 'text/plain; charset=utf-8'}
+            )
+            return error_response
         
         # Limpiar archivo temporal después de leerlo
         try:
@@ -3144,8 +3222,14 @@ def descargar_formulario_pdf_file(id):
         print(f"ERROR: Error al servir PDF: {serve_error}")
         import traceback
         traceback.print_exc()
-        flash('Error al servir el PDF. Por favor, intenta nuevamente.', 'error')
-        return redirect(url_for('formularios'))
+        from flask import Response  # type: ignore
+        error_response = Response(
+            f'Error al servir el PDF: {str(serve_error)}',
+            status=500,
+            mimetype='text/plain',
+            headers={'Content-Type': 'text/plain; charset=utf-8'}
+        )
+        return error_response
 
 
 @app.route('/api/formularios/<int:id>/campos', methods=['POST'])
@@ -4214,26 +4298,28 @@ def generar_pdf_formulario(respuesta_formulario):
         
         print(f"DEBUG: Guardando PDF en R2: {r2_path}")
         pdf_bytes = buffer.getvalue()
+        print(f"DEBUG: Tamaño del PDF generado: {len(pdf_bytes)} bytes")
         
         # Verificar si R2 está configurado
         from r2_storage import get_r2_client
         r2_client = get_r2_client()
         
         if r2_client is None:
-            print(f"ERROR: R2 no está configurado. No se puede guardar el PDF.")
+            print(f"WARNING: R2 no está configurado. El PDF se generó pero no se guardó.")
             # En Vercel, no podemos guardar en disco porque es efímero
-            # Retornar None para que se regenere cuando se intente descargar
-            return None
+            # Retornar el nombre del documento para que se pueda regenerar cuando se intente descargar
+            # IMPORTANTE: Guardar el PDF en la sesión o en memoria para servirlo directamente
+            return documento_nombre
         
         # Intentar guardar en R2
+        print(f"DEBUG: Intentando subir PDF a R2...")
         if upload_file_to_r2(pdf_bytes, r2_path, content_type='application/pdf'):
             print(f"DEBUG: PDF generado exitosamente en R2: {documento_nombre}")
             return documento_nombre
         else:
             print(f"ERROR: No se pudo guardar PDF en R2")
-            # Si R2 está configurado pero falla, retornar None para regenerar después
-            # No guardar en /tmp porque en Vercel es efímero y no estará disponible en otra petición
-            return None
+            # Si R2 está configurado pero falla, retornar el nombre para intentar regenerar después
+            return documento_nombre
         
         # OPTIMIZACIÓN: Reducir tiempo de espera para evitar timeout
         # Esperar 2 segundos antes de eliminar imágenes y firmas (reducido de 5)
