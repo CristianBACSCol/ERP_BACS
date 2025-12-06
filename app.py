@@ -4305,21 +4305,33 @@ def generar_pdf_formulario(respuesta_formulario):
         r2_client = get_r2_client()
         
         if r2_client is None:
-            print(f"WARNING: R2 no está configurado. El PDF se generó pero no se guardó.")
-            # En Vercel, no podemos guardar en disco porque es efímero
-            # Retornar el nombre del documento para que se pueda regenerar cuando se intente descargar
-            # IMPORTANTE: Guardar el PDF en la sesión o en memoria para servirlo directamente
-            return documento_nombre
+            print(f"ERROR: R2 no está configurado. El PDF se generó pero NO se puede guardar.")
+            print(f"ERROR: Por favor, configura las credenciales de R2 en Vercel.")
+            # Retornar None para indicar que no se pudo guardar
+            return None
         
-        # Intentar guardar en R2
+        # Intentar guardar en R2 - ESTO ES CRÍTICO: El PDF DEBE guardarse en R2
         print(f"DEBUG: Intentando subir PDF a R2...")
-        if upload_file_to_r2(pdf_bytes, r2_path, content_type='application/pdf'):
-            print(f"DEBUG: PDF generado exitosamente en R2: {documento_nombre}")
-            return documento_nombre
+        print(f"DEBUG: Ruta R2: {r2_path}")
+        print(f"DEBUG: Tamaño PDF: {len(pdf_bytes)} bytes")
+        
+        upload_success = upload_file_to_r2(pdf_bytes, r2_path, content_type='application/pdf')
+        
+        if upload_success:
+            print(f"DEBUG: ✅ PDF generado y guardado exitosamente en R2: {documento_nombre}")
+            # Verificar que realmente se guardó
+            from r2_storage import file_exists_in_r2
+            if file_exists_in_r2(r2_path):
+                print(f"DEBUG: ✅ Verificación: PDF confirmado en R2")
+                return documento_nombre
+            else:
+                print(f"ERROR: ⚠️ PDF subido pero no se encuentra en R2 después de verificar")
+                return None
         else:
-            print(f"ERROR: No se pudo guardar PDF en R2")
-            # Si R2 está configurado pero falla, retornar el nombre para intentar regenerar después
-            return documento_nombre
+            print(f"ERROR: ❌ No se pudo guardar PDF en R2")
+            print(f"ERROR: Verifica las credenciales de R2 y los permisos del bucket")
+            # Retornar None para indicar que no se pudo guardar
+            return None
         
         # OPTIMIZACIÓN: Reducir tiempo de espera para evitar timeout
         # Esperar 2 segundos antes de eliminar imágenes y firmas (reducido de 5)
