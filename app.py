@@ -4335,7 +4335,6 @@ def generar_pdf_formulario(respuesta_formulario):
         if upload_success:
             print(f"DEBUG: ✅ PDF generado y guardado exitosamente en R2: {documento_nombre}")
             # Verificar que realmente se guardó
-            from r2_storage import file_exists_in_r2
             if file_exists_in_r2(r2_path):
                 print(f"DEBUG: ✅ Verificación: PDF confirmado en R2")
                 
