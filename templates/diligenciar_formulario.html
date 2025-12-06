@@ -233,7 +233,7 @@
                     <label class="form-label">
                         {{ campo.titulo }}{% if campo.obligatorio %} *{% endif %}
                     </label>
-                    <div class="registro-repetible-container" data-campo-id="{{ campo.id }}">
+                    <div class="registro-repetible-container" data-campo-id="{{ campo.id }}" {% if campo.configuracion %}data-configuracion="{{ campo.configuracion }}"{% endif %}>
                         <div class="registros-lista" id="registros_{{ campo.id }}">
                             <!-- Los registros se agregarán dinámicamente aquí -->
                         </div>

@@ -162,6 +162,20 @@
                             </div>
                         </div>
                         
+                        <!-- Para registro repetible: configuración de campos -->
+                        <div id="configuracionRegistroRepetible" style="display: none;">
+                            <div class="form-group">
+                                <label class="form-label">Campos del Registro</label>
+                                <p class="text-muted">Define los campos que tendrá cada registro repetible</p>
+                                <div id="camposRegistroContainer">
+                                    <!-- Los campos se agregarán dinámicamente aquí -->
+                                </div>
+                                <button type="button" class="btn btn-sm btn-outline-primary" onclick="agregarCampoRegistro()">
+                                    <i class="icon-plus"></i> Agregar Campo
+                                </button>
+                            </div>
+                        </div>
+                        
                         <!-- Para campos de selección -->
                         <div id="opcionesSeleccion" style="display: none;">
                             <label class="form-label">Opciones disponibles</label>
@@ -471,6 +485,32 @@ function editarCampo(campoId) {
     } else if (tipoCampo === 'seleccion_multiple') {
         // Cargar menús existentes (esto requeriría una llamada AJAX)
         // Por ahora, simplemente mostrar el modal
+    } else if (tipoCampo === 'registro_repetible') {
+        // Cargar campos del registro repetible desde el servidor
+        fetch(`/api/formularios/campos/${campoId}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.campo.configuracion) {
+                    try {
+                        const config = JSON.parse(data.campo.configuracion);
+                        const campos = config.campos || [];
+                        
+                        // Limpiar contenedor
+                        const container = document.getElementById('camposRegistroContainer');
+                        container.innerHTML = '';
+                        
+                        // Agregar cada campo configurado
+                        campos.forEach(campo => {
+                            agregarCampoRegistroConValores(campo.nombre, campo.tipo, campo.obligatorio);
+                        });
+                    } catch (e) {
+                        console.error('Error parseando configuración:', e);
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Error cargando configuración:', error);
+            });
     }
     
     const modal = document.getElementById('campoModal');
@@ -539,11 +579,13 @@ function cambiarTipoCampo() {
     const opcionesSeleccion = document.getElementById('opcionesSeleccion');
     const configuracionMultiple = document.getElementById('configuracionMultiple');
     const validacionTexto = document.getElementById('validacionTexto');
+    const configuracionRegistroRepetible = document.getElementById('configuracionRegistroRepetible');
     
     // Ocultar todas las configuraciones específicas
     opcionesSeleccion.style.display = 'none';
     configuracionMultiple.style.display = 'none';
     validacionTexto.style.display = 'none';
+    configuracionRegistroRepetible.style.display = 'none';
     
     if (tipo === 'seleccion') {
         configuracion.style.display = 'block';
@@ -554,11 +596,74 @@ function cambiarTipoCampo() {
     } else if (tipo === 'texto') {
         configuracion.style.display = 'block';
         validacionTexto.style.display = 'block';
+    } else if (tipo === 'registro_repetible') {
+        configuracion.style.display = 'block';
+        configuracionRegistroRepetible.style.display = 'block';
+        // Si no hay campos, agregar uno por defecto
+        if (document.getElementById('camposRegistroContainer').children.length === 0) {
+            agregarCampoRegistro();
+        }
     } else if (tipo === 'texto_informativo') {
         configuracion.style.display = 'none';
     } else {
         configuracion.style.display = 'none';
     }
+}
+
+function agregarCampoRegistro() {
+    const container = document.getElementById('camposRegistroContainer');
+    const campoIndex = container.children.length;
+    const div = document.createElement('div');
+    div.className = 'campo-registro-item';
+    div.style.marginBottom = '15px';
+    div.style.padding = '15px';
+    div.style.border = '1px solid #dee2e6';
+    div.style.borderRadius = '8px';
+    div.style.background = '#f8f9fa';
+    div.innerHTML = `
+        <div class="row">
+            <div class="col-md-4">
+                <div class="form-group">
+                    <label class="form-label">Nombre del Campo *</label>
+                    <input type="text" class="form-control campo-registro-nombre" placeholder="Ej: Nombre, Cédula, Ubicación" required>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="form-group">
+                    <label class="form-label">Tipo *</label>
+                    <select class="form-control campo-registro-tipo" required>
+                        <option value="texto">Texto</option>
+                        <option value="textarea">Área de Texto</option>
+                        <option value="numero">Número</option>
+                        <option value="fecha">Fecha</option>
+                        <option value="foto">Foto</option>
+                        <option value="checkbox">Checkbox</option>
+                    </select>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="form-group">
+                    <label class="form-label">Obligatorio</label>
+                    <div class="form-check">
+                        <input type="checkbox" class="form-check-input campo-registro-obligatorio">
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="form-group">
+                    <label class="form-label">Acción</label>
+                    <button type="button" class="btn btn-sm btn-outline-danger btn-block" onclick="eliminarCampoRegistro(this)">
+                        <i class="icon-trash"></i> Eliminar
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    container.appendChild(div);
+}
+
+function eliminarCampoRegistro(button) {
+    button.closest('.campo-registro-item').remove();
 }
 
 function agregarOpcion() {
@@ -625,6 +730,113 @@ function eliminarMenu(button) {
     button.parentElement.remove();
 }
 
+function agregarCampoRegistro() {
+    const container = document.getElementById('camposRegistroContainer');
+    const campoIndex = container.children.length;
+    const div = document.createElement('div');
+    div.className = 'campo-registro-item';
+    div.style.marginBottom = '15px';
+    div.style.padding = '15px';
+    div.style.border = '1px solid #dee2e6';
+    div.style.borderRadius = '8px';
+    div.style.background = '#f8f9fa';
+    div.innerHTML = `
+        <div class="row">
+            <div class="col-md-4">
+                <div class="form-group">
+                    <label class="form-label">Nombre del Campo *</label>
+                    <input type="text" class="form-control campo-registro-nombre" placeholder="Ej: Nombre, Cédula, Ubicación" required>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="form-group">
+                    <label class="form-label">Tipo *</label>
+                    <select class="form-control campo-registro-tipo" required>
+                        <option value="texto">Texto</option>
+                        <option value="textarea">Área de Texto</option>
+                        <option value="numero">Número</option>
+                        <option value="fecha">Fecha</option>
+                        <option value="foto">Foto</option>
+                        <option value="checkbox">Checkbox</option>
+                    </select>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="form-group">
+                    <label class="form-label">Obligatorio</label>
+                    <div class="form-check" style="margin-top: 8px;">
+                        <input type="checkbox" class="form-check-input campo-registro-obligatorio">
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="form-group">
+                    <label class="form-label">Acción</label>
+                    <button type="button" class="btn btn-sm btn-outline-danger btn-block" onclick="eliminarCampoRegistro(this)">
+                        <i class="icon-trash"></i> Eliminar
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    container.appendChild(div);
+}
+
+function agregarCampoRegistroConValores(nombre, tipo, obligatorio) {
+    const container = document.getElementById('camposRegistroContainer');
+    const div = document.createElement('div');
+    div.className = 'campo-registro-item';
+    div.style.marginBottom = '15px';
+    div.style.padding = '15px';
+    div.style.border = '1px solid #dee2e6';
+    div.style.borderRadius = '8px';
+    div.style.background = '#f8f9fa';
+    div.innerHTML = `
+        <div class="row">
+            <div class="col-md-4">
+                <div class="form-group">
+                    <label class="form-label">Nombre del Campo *</label>
+                    <input type="text" class="form-control campo-registro-nombre" placeholder="Ej: Nombre, Cédula, Ubicación" value="${nombre || ''}" required>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="form-group">
+                    <label class="form-label">Tipo *</label>
+                    <select class="form-control campo-registro-tipo" required>
+                        <option value="texto" ${tipo === 'texto' ? 'selected' : ''}>Texto</option>
+                        <option value="textarea" ${tipo === 'textarea' ? 'selected' : ''}>Área de Texto</option>
+                        <option value="numero" ${tipo === 'numero' ? 'selected' : ''}>Número</option>
+                        <option value="fecha" ${tipo === 'fecha' ? 'selected' : ''}>Fecha</option>
+                        <option value="foto" ${tipo === 'foto' ? 'selected' : ''}>Foto</option>
+                        <option value="checkbox" ${tipo === 'checkbox' ? 'selected' : ''}>Checkbox</option>
+                    </select>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="form-group">
+                    <label class="form-label">Obligatorio</label>
+                    <div class="form-check" style="margin-top: 8px;">
+                        <input type="checkbox" class="form-check-input campo-registro-obligatorio" ${obligatorio ? 'checked' : ''}>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="form-group">
+                    <label class="form-label">Acción</label>
+                    <button type="button" class="btn btn-sm btn-outline-danger btn-block" onclick="eliminarCampoRegistro(this)">
+                        <i class="icon-trash"></i> Eliminar
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    container.appendChild(div);
+}
+
+function eliminarCampoRegistro(button) {
+    button.closest('.campo-registro-item').remove();
+}
+
 function guardarCampo() {
     const form = document.getElementById('campoForm');
     const formData = new FormData(form);
@@ -669,6 +881,23 @@ function guardarCampo() {
             }
         });
         data.configuracion.menus = menus;
+    } else if (data.tipo_campo === 'registro_repetible') {
+        // Recopilar campos del registro repetible
+        const camposRegistro = [];
+        document.querySelectorAll('.campo-registro-item').forEach(item => {
+            const nombre = item.querySelector('.campo-registro-nombre').value.trim();
+            const tipo = item.querySelector('.campo-registro-tipo').value;
+            const obligatorio = item.querySelector('.campo-registro-obligatorio').checked;
+            
+            if (nombre) {
+                camposRegistro.push({
+                    nombre: nombre,
+                    tipo: tipo,
+                    obligatorio: obligatorio
+                });
+            }
+        });
+        data.configuracion.campos = camposRegistro;
     }
     
     // Determinar URL y método según si es edición o creación

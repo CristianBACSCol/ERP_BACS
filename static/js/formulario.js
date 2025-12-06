@@ -1015,11 +1015,96 @@ if (formulario) {
 // Funciones para registro repetible
 function agregarRegistro(campoId) {
     const lista = document.getElementById(`registros_${campoId}`);
-    if (!lista) return;
+    if (!lista) {
+        console.error(`No se encontró la lista de registros para campo ${campoId}`);
+        return;
+    }
+    
+    // Obtener la configuración de campos desde el contenedor del registro repetible
+    const container = document.querySelector(`.registro-repetible-container[data-campo-id="${campoId}"]`);
+    if (!container) {
+        console.error(`No se encontró el contenedor de registro repetible para campo ${campoId}`);
+        return;
+    }
+    
+    const configuracionStr = container.getAttribute('data-configuracion');
+    let camposConfig = [];
+    
+    if (configuracionStr) {
+        try {
+            const config = JSON.parse(configuracionStr);
+            camposConfig = config.campos || [];
+        } catch (e) {
+            console.error('Error parseando configuración:', e);
+        }
+    }
+    
+    // Si no hay configuración, usar campos por defecto (compatibilidad)
+    if (camposConfig.length === 0) {
+        camposConfig = [
+            { nombre: 'Nombre', tipo: 'texto', obligatorio: true },
+            { nombre: 'Observación', tipo: 'textarea', obligatorio: true },
+            { nombre: 'Foto', tipo: 'foto', obligatorio: false }
+        ];
+    }
     
     const registroIndex = lista.children.length;
     const registroDiv = document.createElement('div');
     registroDiv.className = 'registro-item';
+    
+    let camposHTML = '';
+    camposConfig.forEach((campo, idx) => {
+        const campoKey = campo.nombre.toLowerCase().replace(/\s+/g, '_');
+        const campoName = `registro_${campoId}_${campoKey}_${registroIndex}`;
+        const required = campo.obligatorio ? 'required' : '';
+        const requiredLabel = campo.obligatorio ? ' *' : '';
+        
+        let inputHTML = '';
+        
+        switch(campo.tipo) {
+            case 'texto':
+                inputHTML = `<input type="text" name="${campoName}" class="form-control" ${required} placeholder="${campo.nombre}">`;
+                break;
+            case 'textarea':
+                inputHTML = `<textarea name="${campoName}" class="form-control" rows="3" ${required} placeholder="${campo.nombre}"></textarea>`;
+                break;
+            case 'numero':
+                inputHTML = `<input type="number" name="${campoName}" class="form-control" ${required} placeholder="${campo.nombre}">`;
+                break;
+            case 'fecha':
+                inputHTML = `<input type="date" name="${campoName}" class="form-control" ${required}>`;
+                break;
+            case 'foto':
+                inputHTML = `
+                    <input type="file" name="${campoName}" class="form-control registro-foto-input" accept="image/*" ${required}
+                           onchange="previewRegistroFoto(this, ${campoId}, ${registroIndex}, '${campoKey}')">
+                    <div class="registro-foto-preview" id="preview_registro_${campoId}_${registroIndex}_${campoKey}" style="display: none;">
+                        <img src="" alt="Preview" style="max-width: 200px; max-height: 200px; margin-top: 10px;">
+                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="eliminarPreviewFoto(this)">
+                            <i class="icon-trash"></i> Eliminar Foto
+                        </button>
+                    </div>
+                `;
+                break;
+            case 'checkbox':
+                inputHTML = `<div class="form-check"><input type="checkbox" name="${campoName}" class="form-check-input" value="1" ${required}><label class="form-check-label">${campo.nombre}</label></div>`;
+                break;
+            default:
+                inputHTML = `<input type="text" name="${campoName}" class="form-control" ${required} placeholder="${campo.nombre}">`;
+        }
+        
+        camposHTML += `
+            <div class="row">
+                <div class="col-md-12">
+                    <div class="form-group">
+                        <label class="form-label">${campo.nombre}${requiredLabel}</label>
+                        ${inputHTML}
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+    
     registroDiv.innerHTML = `
         <div class="registro-header">
             <h5>Registro ${registroIndex + 1}</h5>
@@ -1027,40 +1112,7 @@ function agregarRegistro(campoId) {
                 <i class="icon-trash"></i> Eliminar
             </button>
         </div>
-        <div class="row">
-            <div class="col-md-12">
-                <div class="form-group">
-                    <label class="form-label">Nombre *</label>
-                    <input type="text" name="registro_${campoId}_nombre_${registroIndex}" 
-                           class="form-control" required>
-                </div>
-            </div>
-        </div>
-        <div class="row">
-            <div class="col-md-12">
-                <div class="form-group">
-                    <label class="form-label">Observación *</label>
-                    <textarea name="registro_${campoId}_observacion_${registroIndex}" 
-                              class="form-control" rows="3" required></textarea>
-                </div>
-            </div>
-        </div>
-        <div class="row">
-            <div class="col-md-12">
-                <div class="form-group">
-                    <label class="form-label">Foto (Opcional)</label>
-                    <input type="file" name="registro_${campoId}_foto_${registroIndex}" 
-                           class="form-control registro-foto-input" accept="image/*"
-                           onchange="previewRegistroFoto(this, ${campoId}, ${registroIndex})">
-                    <div class="registro-foto-preview" id="preview_registro_${campoId}_${registroIndex}" style="display: none;">
-                        <img src="" alt="Preview" style="max-width: 200px; max-height: 200px; margin-top: 10px;">
-                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="eliminarPreviewFoto(this)">
-                            <i class="icon-trash"></i> Eliminar Foto
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
+        ${camposHTML}
         <hr>
     `;
     lista.appendChild(registroDiv);
@@ -1087,8 +1139,9 @@ function actualizarNumeracionRegistros(container) {
     });
 }
 
-function previewRegistroFoto(input, campoId, registroIndex) {
-    const previewDiv = document.getElementById(`preview_registro_${campoId}_${registroIndex}`);
+function previewRegistroFoto(input, campoId, registroIndex, campoKey) {
+    const previewId = campoKey ? `preview_registro_${campoId}_${registroIndex}_${campoKey}` : `preview_registro_${campoId}_${registroIndex}`;
+    const previewDiv = document.getElementById(previewId);
     if (!previewDiv) return;
     
     const file = input.files[0];
