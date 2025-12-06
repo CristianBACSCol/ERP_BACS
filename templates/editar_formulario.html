@@ -104,7 +104,7 @@
                     <i class="icon-close"></i>
                 </button>
             </div>
-            <div class="modal-body" style="overflow-y: auto; max-height: calc(85vh - 140px);">
+            <div class="modal-body">
                 <form id="campoForm">
                     <input type="hidden" id="campoId" name="campo_id" value="">
                     <input type="hidden" id="formularioId" name="formulario_id" value="{{ formulario.id }}">
@@ -442,15 +442,15 @@ function mostrarModalAgregarCampo() {
     }
     
     const modal = document.getElementById('campoModal');
-    modal.style.display = 'flex'; // Usar flex para centrar correctamente
+    modal.style.display = 'flex';
     
-    // Guardar la posición del scroll para restaurarla después
+    // Bloquear scroll del body cuando el modal está abierto
     const scrollY = window.scrollY;
-    modal.dataset.scrollY = scrollY;
-    
-    // NO bloquear el scroll del body, permitir que el modal maneje su propio scroll
-    // Solo prevenir el scroll del body cuando el modal está abierto
+    document.body.style.position = 'fixed';
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = '100%';
     document.body.style.overflow = 'hidden';
+    modal.dataset.scrollY = scrollY;
     
     // Scroll al inicio del modal body
     const modalBody = modal.querySelector('.modal-body');
@@ -521,15 +521,15 @@ function editarCampo(campoId) {
     }
     
     const modal = document.getElementById('campoModal');
-    modal.style.display = 'flex'; // Usar flex para centrar correctamente
+    modal.style.display = 'flex';
     
-    // Guardar la posición del scroll para restaurarla después
+    // Bloquear scroll del body cuando el modal está abierto
     const scrollY = window.scrollY;
-    modal.dataset.scrollY = scrollY;
-    
-    // NO bloquear el scroll del body, permitir que el modal maneje su propio scroll
-    // Solo prevenir el scroll del body cuando el modal está abierto
+    document.body.style.position = 'fixed';
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = '100%';
     document.body.style.overflow = 'hidden';
+    modal.dataset.scrollY = scrollY;
     
     // Scroll al inicio del modal body
     const modalBody = modal.querySelector('.modal-body');
@@ -948,7 +948,12 @@ function cerrarModalCampo() {
     modal.style.display = 'none';
     
     // Restaurar scroll del body
+    const scrollY = modal.dataset.scrollY || 0;
+    document.body.style.position = '';
+    document.body.style.top = '';
+    document.body.style.width = '';
     document.body.style.overflow = '';
+    window.scrollTo(0, parseInt(scrollY));
 }
 
 function cerrarModalConfirmacion() {
