@@ -4316,7 +4316,7 @@ def generar_pdf_formulario(respuesta_formulario):
         print(f"DEBUG: Tamaño del PDF generado: {len(pdf_bytes)} bytes")
         
         # Verificar si R2 está configurado
-        from r2_storage import get_r2_client
+        from r2_storage import get_r2_client, delete_file_from_r2
         r2_client = get_r2_client()
         
         if r2_client is None:
@@ -4338,6 +4338,66 @@ def generar_pdf_formulario(respuesta_formulario):
             from r2_storage import file_exists_in_r2
             if file_exists_in_r2(r2_path):
                 print(f"DEBUG: ✅ Verificación: PDF confirmado en R2")
+                
+                # IMPORTANTE: Eliminar imágenes y firmas DESPUÉS de guardar el PDF exitosamente
+                # Esperar un momento para asegurar que el PDF se guardó completamente
+                import time
+                print(f"DEBUG: Esperando 2 segundos antes de limpiar archivos de imágenes y firmas...")
+                time.sleep(2)
+                
+                # Eliminar imágenes y firmas de R2 después de generar el PDF
+                try:
+                    print(f"DEBUG: Iniciando limpieza de imágenes y firmas de R2...")
+                    # Eliminar imágenes y firmas relacionadas con este formulario
+                    if respuesta_formulario.respuestas_campos:
+                        for respuesta_campo in respuesta_formulario.respuestas_campos:
+                            # Obtener el campo asociado
+                            campo = next((c for c in respuesta_formulario.formulario.campos if c.id == respuesta_campo.campo_id), None)
+                            if not campo:
+                                continue
+                            
+                            if respuesta_campo.valor_archivo:
+                                if campo.tipo_campo == 'foto':
+                                    # Eliminar todas las fotos del campo
+                                    fotos_list = respuesta_campo.valor_archivo.split(',')
+                                    for foto_filename in fotos_list:
+                                        foto_filename = foto_filename.strip()
+                                        if foto_filename:
+                                            r2_foto_path = f'Formularios/imagenes/{foto_filename}'
+                                            if delete_file_from_r2(r2_foto_path):
+                                                print(f"DEBUG: ✅ Imagen eliminada de R2: {r2_foto_path}")
+                                            else:
+                                                print(f"DEBUG: ⚠️ Error al eliminar imagen de R2: {r2_foto_path}")
+                                
+                                elif campo.tipo_campo == 'firma':
+                                    # Eliminar firma
+                                    # El valor_archivo puede ser: "formularios/firmas/firma_xxx.png" o "Formularios/firmas/firma_xxx.png"
+                                    firma_path = respuesta_campo.valor_archivo.strip()
+                                    if firma_path:
+                                        # Normalizar separadores y asegurar que empiece con "Formularios"
+                                        normalized_path = firma_path.replace('\\', '/')
+                                        if normalized_path.startswith('formularios/'):
+                                            r2_firma_path = normalized_path.replace('formularios/', 'Formularios/', 1)
+                                        elif normalized_path.startswith('Formularios/'):
+                                            r2_firma_path = normalized_path
+                                        else:
+                                            # Si no tiene prefijo, asumir que es solo el nombre del archivo
+                                            r2_firma_path = f'Formularios/firmas/{normalized_path}'
+                                        
+                                        print(f"DEBUG: Intentando eliminar firma de R2: {r2_firma_path}")
+                                        if delete_file_from_r2(r2_firma_path):
+                                            print(f"DEBUG: ✅ Firma eliminada de R2: {r2_firma_path}")
+                                        else:
+                                            print(f"DEBUG: ⚠️ Error al eliminar firma de R2: {r2_firma_path}")
+                    
+                    print(f"DEBUG: ✅ Limpieza de archivos de imágenes y firmas completada")
+                except Exception as cleanup_error:
+                    print(f"DEBUG: ⚠️ Error eliminando archivos de R2: {cleanup_error}")
+                    import traceback
+                    traceback.print_exc()
+                    # Continuar aunque falle la limpieza, el PDF ya está guardado
+                
+                # Retornar el nombre del documento después de limpiar
                 return documento_nombre
             else:
                 print(f"ERROR: ⚠️ PDF subido pero no se encuentra en R2 después de verificar")
@@ -4347,67 +4407,6 @@ def generar_pdf_formulario(respuesta_formulario):
             print(f"ERROR: Verifica las credenciales de R2 y los permisos del bucket")
             # Retornar None para indicar que no se pudo guardar
             return None
-        
-        # OPTIMIZACIÓN: Reducir tiempo de espera para evitar timeout
-        # Esperar 2 segundos antes de eliminar imágenes y firmas (reducido de 5)
-        import time
-        print(f"DEBUG: Esperando 2 segundos antes de limpiar archivos de imágenes y firmas...")
-        time.sleep(2)
-        
-        # Eliminar imágenes y firmas de R2 después de generar el PDF
-        try:
-            # Eliminar imágenes y firmas relacionadas con este formulario
-            if respuesta_formulario.respuestas_campos:
-                for respuesta_campo in respuesta_formulario.respuestas_campos:
-                    # Obtener el campo asociado
-                    campo = next((c for c in respuesta_formulario.formulario.campos if c.id == respuesta_campo.campo_id), None)
-                    if not campo:
-                        continue
-                    
-                    if respuesta_campo.valor_archivo:
-                        if campo.tipo_campo == 'foto':
-                            # Eliminar todas las fotos del campo
-                            fotos_list = respuesta_campo.valor_archivo.split(',')
-                            for foto_filename in fotos_list:
-                                foto_filename = foto_filename.strip()
-                                if foto_filename:
-                                    r2_foto_path = f'Formularios/imagenes/{foto_filename}'
-                                    if delete_file_from_r2(r2_foto_path):
-                                        print(f"DEBUG: Imagen eliminada de R2: {r2_foto_path}")
-                                    else:
-                                        print(f"DEBUG: Error al eliminar imagen de R2: {r2_foto_path}")
-                        
-                        elif campo.tipo_campo == 'firma':
-                            # Eliminar firma
-                            if 'formularios' in respuesta_campo.valor_archivo or 'firmas' in respuesta_campo.valor_archivo:
-                                normalized_path = respuesta_campo.valor_archivo.replace('\\', '/')
-                                r2_firma_path = normalized_path.replace('formularios', 'Formularios', 1)
-                                if delete_file_from_r2(r2_firma_path):
-                                    print(f"DEBUG: Firma eliminada de R2: {r2_firma_path}")
-                                else:
-                                    print(f"DEBUG: Error al eliminar firma de R2: {r2_firma_path}")
-            
-            print(f"DEBUG: Limpieza de archivos de imágenes y firmas completada")
-        except Exception as cleanup_error:
-            print(f"DEBUG: Error eliminando archivos de R2: {cleanup_error}")
-            import traceback
-            traceback.print_exc()
-        
-        # Limpiar archivos temporales después de generar el PDF
-        try:
-            import glob
-            # Patrones de archivos temporales que generamos
-            patterns = ['temp_*', 'firma_respaldo_*']
-            for pattern in patterns:
-                temp_files = glob.glob(os.path.join(app.config['UPLOAD_FOLDER'], pattern))
-                for temp_file in temp_files:
-                    if os.path.exists(temp_file):
-                        os.remove(temp_file)
-                        print(f"DEBUG: Archivo temporal eliminado: {temp_file}")
-        except Exception as cleanup_error:
-            print(f"DEBUG: Error limpiando archivos temporales: {cleanup_error}")
-        
-        return documento_nombre
         
     except Exception as e:
         print(f"Error generando PDF del formulario: {e}")
