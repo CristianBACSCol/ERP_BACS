@@ -4323,9 +4323,6 @@ def generar_pdf_formulario(respuesta_formulario):
                         valor = f"{len(fotos_list)} de {len(respuesta_campo.valor_archivo.split(','))} foto(s) mostradas (máximo {MAX_IMAGES_PER_FIELD} por campo)"
                     
                     # Procesar fotos con redimensionamiento inteligente
-                    # Procesar imágenes para layout inteligente (Collage/Grid)
-                    valid_images_paths = []
-                    
                     for idx, foto_filename in enumerate(fotos_list):
                         foto_filename = foto_filename.strip()
                         if not foto_filename:
@@ -4334,8 +4331,6 @@ def generar_pdf_formulario(respuesta_formulario):
                         # Detectar si es Base64 (data URI o formato BASE64:)
                         import base64
                         from io import BytesIO
-                        
-                        foto_path = None
                         
                         if foto_filename.startswith('data:image') or foto_filename.startswith('BASE64:'):
                             print(f"DEBUG: Imagen en formato Base64 detectada para índice {idx}")
@@ -4352,13 +4347,12 @@ def generar_pdf_formulario(respuesta_formulario):
                                 
                                 # Guardar en archivo temporal
                                 import tempfile
-                                temp_fd, temp_path = tempfile.mkstemp(suffix='.jpg')
+                                temp_fd, foto_path = tempfile.mkstemp(suffix='.jpg')
                                 os.close(temp_fd)
                                 
-                                with open(temp_path, 'wb') as f:
+                                with open(foto_path, 'wb') as f:
                                     f.write(image_bytes)
                                     
-                                foto_path = temp_path
                                 print(f"DEBUG: Imagen Base64 guardada temporalmente: {foto_path}")
                             except Exception as b64_error:
                                 print(f"ERROR decodificando imagen Base64: {b64_error}")
@@ -4390,104 +4384,100 @@ def generar_pdf_formulario(respuesta_formulario):
                                 if not foto_path:
                                     print(f"ERROR: No se pudo descargar imagen de R2: {r2_foto_path}")
                                     continue
+
+                        
+                        print(f"DEBUG: Imagen descargada exitosamente: {foto_path}")
                         
                         if foto_path and os.path.exists(foto_path):
-                            valid_images_paths.append(foto_path)
-
-                    # GENERAR LAYOUT DE FOTOS (GRID)
-                    if valid_images_paths:
-                        print(f"DEBUG: Generando grid para {len(valid_images_paths)} imágenes")
-                        
-                        # Si es solo 1 imagen, mostrarla grande y centrada
-                        if len(valid_images_paths) == 1:
-                            path = valid_images_paths[0]
                             try:
-                                with PILImage.open(path) as img:
-                                    # Permitir hasta 16x20cm
-                                    max_w = 16 * 28.35
-                                    max_h = 20 * 28.35
-                                    aspect = img.width / img.height
+                                # Verificar si es una imagen
+                                with PILImage.open(foto_path) as img:
+                                    # OPTIMIZACIÓN: Resolución mejorada - Permitir imágenes grandes
+                                    # Redimensionar según orientación (16cm ancho página A4 aprox)
+                                    max_width_cm = 16  # cm (aumentado de 4cm para mejor resolución)
+                                    max_height_cm = 20  # cm (permitir verticalidad)
+                                    max_width_points = max_width_cm * 28.35  # convertir cm a puntos
+                                    max_height_points = max_height_cm * 28.35
                                     
-                                    new_w = min(img.width, max_w)
-                                    new_h = new_w / aspect
+                                    # Determinar orientación y aplicar reglas
+                                    aspect_ratio = img.width / img.height
                                     
-                                    if new_h > max_h:
-                                        new_h = max_h
-                                        new_w = new_h * aspect
-                                        
-                                    pdf_img = Image(path, width=new_w, height=new_h)
-                                    
-                                    # Tabla contenedor
-                                    # Tabla contenedor
-                                    t = Table([[pdf_img]], colWidths=[new_w + 10])
-                                    t.setStyle(TableStyle([
-                                        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-                                        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-                                        ('BOX', (0,0), (-1,-1), 1, colors.HexColor('#bdc3c7')),
-                                        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#f8f9fa')),
-                                        ('LEFTPADDING', (0,0), (-1,-1), 5),
-                                        ('RIGHTPADDING', (0,0), (-1,-1), 5),
-                                        ('TOPPADDING', (0,0), (-1,-1), 5),
-                                        ('BOTTOMPADDING', (0,0), (-1,-1), 5),
-                                    ]))
-                                    story.append(t)
-                            except Exception as e:
-                                print(f"Error 1 img: {e}")
-                        
-                        else:
-                            # Múltiples imágenes: Grid de 2 columnas
-                            # Ancho de página útil ~18cm -> ~9cm por columna
-                            col_width = (17 * 28.35) / 2
-                            max_cell_h = 10 * 28.35 
-                            
-                            grid_rows = []
-                            current_row_imgs = []
-                            
-                            for path in valid_images_paths:
-                                try:
-                                    with PILImage.open(path) as img:
-                                        aspect = img.width / img.height
-                                        
-                                        # Ajustar para que quepa en la celda (con margen interno)
-                                        target_w = col_width - 10
-                                        target_h = target_w / aspect
-                                        
-                                        if target_h > max_cell_h:
-                                            target_h = max_cell_h
-                                            target_w = target_h * aspect
+                                    if aspect_ratio > 1.1:  # Horizontal (más ancho que alto)
+                                        # Limitar ancho a max_width
+                                        if img.width > max_width_points:
+                                            new_width = max_width_points
+                                            new_height = new_width / aspect_ratio
+                                        else:
+                                            new_width = img.width
+                                            new_height = img.height
                                             
-                                        # Crear imagen
-                                        pdf_img = Image(path, width=target_w, height=target_h)
-                                        current_row_imgs.append(pdf_img)
-                                        
-                                        if len(current_row_imgs) == 2:
-                                            grid_rows.append(current_row_imgs)
-                                            current_row_imgs = []
-                                except:
-                                    pass
+                                        # Verificar que alto no exceda límite
+                                        if new_height > max_height_points:
+                                            ratio = max_height_points / new_height
+                                            new_width = new_width * ratio
+                                            new_height = max_height_points
+                                            
+                                    else:  # Vertical o Cuadrada
+                                        # Limitar ancho a max_width (16cm)
+                                        if img.width > max_width_points:
+                                            new_width = max_width_points
+                                            new_height = new_width / aspect_ratio
+                                        else:
+                                            new_width = img.width
+                                            new_height = img.height
+                                            
+                                        # Verificar que alto no exceda límite
+                                        if new_height > max_height_points:
+                                            ratio = max_height_points / new_height
+                                            new_width = new_width * ratio
+                                            new_height = max_height_points
                                     
-                            # Si quedó una impar
-                            if current_row_imgs:
-                                current_row_imgs.append(Spacer(1,1)) # Relleno
-                                grid_rows.append(current_row_imgs)
-                                
-                            # Construir tabla
-                            if grid_rows:
-                                t = Table(grid_rows, colWidths=[col_width, col_width])
-                                t.setStyle(TableStyle([
-                                    ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-                                    ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-                                    ('BOX', (0,0), (-1,-1), 0.5, colors.HexColor('#bdc3c7')),
-                                    ('INNERGRID', (0,0), (-1,-1), 0.5, colors.HexColor('#bdc3c7')),
-                                    ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#f8f9fa')),
-                                    ('LEFTPADDING', (0,0), (-1,-1), 5),
-                                    ('RIGHTPADDING', (0,0), (-1,-1), 5),
-                                    ('TOPPADDING', (0,0), (-1,-1), 5),
-                                    ('BOTTOMPADDING', (0,0), (-1,-1), 5),
-                                ]))
-                                story.append(t)
-                        
-                        story.append(Spacer(1, 10))
+                                    # Convertir a enteros
+                                    new_width = int(new_width)
+                                    new_height = int(new_height)
+                                    
+                                    # IMPORTANTE: NO redimensionar la imagen física (píxeles) a menos que sea GIGANTE (>4000px)
+                                    # Dejar que el PDF maneje la resolución de visualización (width/height en Image())
+                                    # Solo reducir si es extremadamente grande para no explotar memoria
+                                    if img.width > 4000 or img.height > 4000:
+                                        print(f"DEBUG: Reduciendo imagen gigante ({img.size}) para PDF seguro")
+                                        img.thumbnail((3000, 3000), PILImage.Resampling.LANCZOS)
+                                    
+                                    # Guardar imagen temporalmente con ALTA calidad
+                                    import tempfile
+                                    temp_fd, temp_path = tempfile.mkstemp(suffix=os.path.splitext(foto_filename)[1] or '.jpg')
+                                    os.close(temp_fd)
+                                    # Calidad 95 para mantener nitidez
+                                    img.save(temp_path, quality=95, optimize=True)
+                                    
+                                    # Agregar imagen centrada con borde usando dimensiones calculadas para visualización
+                                    pdf_image = Image(temp_path, width=new_width, height=new_height)
+                                    
+                                    # Crear tabla para centrar la imagen con borde
+                                    image_table = Table([[pdf_image]], colWidths=[new_width])
+                                    image_table.setStyle(TableStyle([
+                                        ('ALIGN', (0, 0), (0, 0), 'CENTER'),
+                                        ('VALIGN', (0, 0), (0, 0), 'MIDDLE'),
+                                        ('BOX', (0, 0), (0, 0), 1, colors.HexColor('#bdc3c7')),
+                                        ('BACKGROUND', (0, 0), (0, 0), colors.HexColor('#f8f9fa')),
+                                    ]))
+                                    
+                                    story.append(image_table)
+                                    story.append(Spacer(1, 10))  # Espacio entre fotos
+                                    
+                                    print(f"DEBUG: Imagen agregada exitosamente al PDF: {foto_filename}")
+                                    
+                                    # NO eliminar archivo temporal aquí - se eliminará después de generar el PDF
+                                    
+                            except Exception as e:
+                                print(f"ERROR procesando imagen {foto_filename}: {e}")
+                                import traceback
+                                traceback.print_exc()
+                                # Continuar con la siguiente imagen
+                                continue
+                        else:
+                            print(f"ERROR: Archivo de imagen no existe después de descargar: {foto_path}")
+                            continue
                 else:
                     valor = ""
             
