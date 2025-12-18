@@ -4394,86 +4394,72 @@ def generar_pdf_formulario(respuesta_formulario):
                         if foto_path and os.path.exists(foto_path):
                             valid_images_paths.append(foto_path)
 
-                    # GENERAR LAYOUT DE FOTOS (GRID)
+                    # GENERAR LAYOUT DE FOTOS (GRID DINÁMICO)
                     if valid_images_paths:
-                        print(f"DEBUG: Generando grid para {len(valid_images_paths)} imágenes")
+                        print(f"DEBUG: Generando grid dinámico para {len(valid_images_paths)} imágenes")
                         
-                        # Si es solo 1 imagen, mostrarla grande y centrada
-                        if len(valid_images_paths) == 1:
-                            path = valid_images_paths[0]
-                            try:
-                                with PILImage.open(path) as img:
-                                    # Permitir hasta 16x20cm
-                                    max_w = 16 * 28.35
-                                    max_h = 20 * 28.35
-                                    aspect = img.width / img.height
-                                    
-                                    new_w = min(img.width, max_w)
-                                    new_h = new_w / aspect
-                                    
-                                    if new_h > max_h:
-                                        new_h = max_h
-                                        new_w = new_h * aspect
-                                        
-                                    pdf_img = Image(path, width=new_w, height=new_h)
-                                    
-                                    # Tabla contenedor
-                                    # Tabla contenedor
-                                    t = Table([[pdf_img]], colWidths=[new_w + 10])
-                                    t.setStyle(TableStyle([
-                                        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-                                        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-                                        ('BOX', (0,0), (-1,-1), 1, colors.HexColor('#bdc3c7')),
-                                        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#f8f9fa')),
-                                        ('LEFTPADDING', (0,0), (-1,-1), 5),
-                                        ('RIGHTPADDING', (0,0), (-1,-1), 5),
-                                        ('TOPPADDING', (0,0), (-1,-1), 5),
-                                        ('BOTTOMPADDING', (0,0), (-1,-1), 5),
-                                    ]))
-                                    story.append(t)
-                            except Exception as e:
-                                print(f"Error 1 img: {e}")
+                        # Configuración de dimensiones
+                        TARGET_SIZE_CM = 6.0
+                        TARGET_SIZE_PTS = TARGET_SIZE_CM * 28.35
                         
-                        else:
-                            # Múltiples imágenes: Grid de 2 columnas
-                            # Ancho de página útil ~18cm -> ~9cm por columna
-                            col_width = (17 * 28.35) / 2
-                            max_cell_h = 10 * 28.35 
+                        # 1. Agrupar imágenes en filas (Heurística: filas de 3 o 2)
+                        rows = []
+                        remaining_images = valid_images_paths[:]
+                        
+                        while remaining_images:
+                            count = len(remaining_images)
+                            take = 3 # Por defecto intentar fila de 3
                             
-                            grid_rows = []
-                            current_row_imgs = []
+                            if count == 4:
+                                take = 2 # Mejor 2x2 que 3+1
+                            elif count == 2:
+                                take = 2
+                            elif count == 1:
+                                take = 1
                             
-                            for path in valid_images_paths:
+                            # Si es impar grande (ej 5), el default de 3 deja 2 -> perfecto (3+2)
+                            # Si es 7: 3 -> queda 4 -> siguiente loop toma 2 -> queda 2 -> toma 2. (3, 2, 2). Aceptable.
+                            
+                            chunk = remaining_images[:take]
+                            remaining_images = remaining_images[take:]
+                            rows.append(chunk)
+                        
+                        # 2. Procesar cada fila
+                        for row_paths in rows:
+                            row_flowables = []
+                            col_widths = []
+                            
+                            for path in row_paths:
                                 try:
                                     with PILImage.open(path) as img:
+                                        # Regla: Máximo 6cm de alto o ancho, conservando aspecto.
+                                        # Si es menor, escalar HASTA 6cm (up-scaling).
+                                        # Si es mayor, reducir HASTA 6cm (down-scaling).
+                                        
                                         aspect = img.width / img.height
                                         
-                                        # Ajustar para que quepa en la celda (con margen interno)
-                                        target_w = col_width - 10
-                                        target_h = target_w / aspect
+                                        if aspect >= 1: # Horizontal o Cuadrada
+                                            # Mandatorio: Ancho = 6cm
+                                            new_w = TARGET_SIZE_PTS
+                                            new_h = new_w / aspect
+                                        else: # Vertical
+                                            # Mandatorio: Alto = 6cm
+                                            new_h = TARGET_SIZE_PTS
+                                            new_w = new_h * aspect
                                         
-                                        if target_h > max_cell_h:
-                                            target_h = max_cell_h
-                                            target_w = target_h * aspect
-                                            
-                                        # Crear imagen
-                                        pdf_img = Image(path, width=target_w, height=target_h)
-                                        current_row_imgs.append(pdf_img)
+                                        # Crear imagen para PDF
+                                        pdf_img = Image(path, width=new_w, height=new_h)
+                                        row_flowables.append(pdf_img)
                                         
-                                        if len(current_row_imgs) == 2:
-                                            grid_rows.append(current_row_imgs)
-                                            current_row_imgs = []
-                                except:
-                                    pass
-                                    
-                            # Si quedó una impar
-                            if current_row_imgs:
-                                current_row_imgs.append(Spacer(1,1)) # Relleno
-                                grid_rows.append(current_row_imgs)
-                                
-                            # Construir tabla
-                            if grid_rows:
-                                t = Table(grid_rows, colWidths=[col_width, col_width])
+                                        # La celda de la tabla tendrá 6cm + margen
+                                        col_widths.append(TARGET_SIZE_PTS + 10)
+                                        
+                                except Exception as e:
+                                    print(f"Error procesando imagen para grid: {e}")
+                            
+                            # Crear tabla para esta fila
+                            if row_flowables:
+                                t = Table([row_flowables], colWidths=col_widths)
                                 t.setStyle(TableStyle([
                                     ('ALIGN', (0,0), (-1,-1), 'CENTER'),
                                     ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
@@ -4486,6 +4472,7 @@ def generar_pdf_formulario(respuesta_formulario):
                                     ('BOTTOMPADDING', (0,0), (-1,-1), 5),
                                 ]))
                                 story.append(t)
+                                story.append(Spacer(1, 5)) # Pequeño espacio entre filas
                         
                         story.append(Spacer(1, 10))
                 else:
