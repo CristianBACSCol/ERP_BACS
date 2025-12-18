@@ -2784,18 +2784,15 @@ def diligenciar_formulario(id):
                     archivos = request.files.getlist(f'campo_{campo.id}')
                     print(f"DEBUG: Campo {campo.id} - Recibidos {len(archivos)} archivos")
                     
-                    # OPTIMIZACIÓN: Procesar imágenes en paralelo para evitar timeouts
-                    from concurrent.futures import ThreadPoolExecutor, as_completed
-                    import threading
-                    
                     nombres_archivos = []
-                    processed_images = {}  # {index: (filename, optimized_data, process_info)}
                     
-                    def process_single_image(i, archivo):
-                        """Procesar una sola imagen"""
+                    # OPTIMIZACIÓN: Procesar imágenes secuencialmente (más estable en Vercel que hilos)
+                    print(f"DEBUG: Procesando {len(archivos)} imágenes secuencialmente para campo {campo.id}...")
+                    
+                    for i, archivo in enumerate(archivos):
                         try:
                             if not archivo or not archivo.filename:
-                                return i, None, None, None
+                                continue
                             
                             # Validar tamaño del archivo antes de procesar
                             archivo.seek(0, 2)
@@ -2806,102 +2803,94 @@ def diligenciar_formulario(id):
                             if file_size > MAX_UPLOAD_SIZE:
                                 error_msg = f"El archivo {archivo.filename} es demasiado grande ({file_size / 1024 / 1024:.2f} MB). Máximo permitido: {MAX_UPLOAD_SIZE / 1024 / 1024:.0f} MB"
                                 print(f"ERROR: {error_msg}")
-                                return i, None, error_msg, None
+                                flash(error_msg, 'warning')
+                                continue
                             
                             # Leer el archivo en memoria
                             file_data = archivo.read()
                             
                             # Validar formato de imagen permitido
                             if not is_image_allowed(archivo.filename, archivo.content_type):
-                                error_msg = f"Formato de imagen no soportado. Formatos permitidos: JPG, PNG, GIF, WebP, HEIC, HEIF, BMP, TIFF"
+                                error_msg = f"Formato de archivo {archivo.filename} no soportado. Se omitirá."
                                 print(f"ERROR: {error_msg}")
-                                return i, None, error_msg, None
-                            
-                            # Procesar imagen usando el módulo dedicado
-                            print(f"DEBUG: [Thread {threading.current_thread().name}] Procesando imagen {i+1}: {archivo.filename} ({len(file_data) / 1024 / 1024:.2f} MB)")
-                            optimized_data, process_info = process_image(file_data, archivo.filename)
-                            print(f"DEBUG: ✅ [Thread {threading.current_thread().name}] Imagen {i+1} procesada exitosamente")
-                            
-                            return i, archivo.filename, optimized_data, process_info
-                        except Exception as e:
-                            error_msg = f"Error procesando imagen {archivo.filename if archivo else 'desconocida'}: {str(e)}"
-                            print(f"ERROR: {error_msg}")
-                            import traceback
-                            traceback.print_exc()
-                            return i, None, error_msg, None
-                    
-                    # Procesar imágenes en paralelo (máximo 4 hilos para no sobrecargar)
-                    max_workers = min(4, len(archivos))
-                    print(f"DEBUG: Procesando {len(archivos)} imágenes en paralelo con {max_workers} hilos...")
-                    
-                    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                        # Enviar todas las tareas
-                        future_to_index = {
-                            executor.submit(process_single_image, i, archivo): i 
-                            for i, archivo in enumerate(archivos)
-                        }
-                        
-                        # Recopilar resultados conforme se completan
-                        for future in as_completed(future_to_index):
-                            i, filename, result, process_info = future.result()
-                            
-                            if isinstance(result, str):  # Error
-                                flash(result, 'error')
+                                flash(error_msg, 'warning')
                                 continue
                             
-                            if result is None:  # Archivo inválido
-                                continue
+                            # Procesar imagen
+                            print(f"DEBUG: Procesando imagen {i+1}: {archivo.filename} ({len(file_data) / 1024 / 1024:.2f} MB)")
+                            try:
+                                optimized_data, process_info = process_image(file_data, archivo.filename)
+                                print(f"DEBUG: ✅ Imagen {i+1} procesada exitosamente")
+                            except Exception as process_error:
+                                print(f"ERROR: Falló el procesamiento de imagen {archivo.filename}: {process_error}")
+                                # Intentar usar datos originales si falla el procesamiento
+                                optimized_data = file_data
+                                process_info = {'layout': 'original'}
                             
-                            processed_images[i] = (filename, result, process_info)
-                    
-                    # Ordenar por índice y subir imágenes procesadas a R2
-                    for i in sorted(processed_images.keys()):
-                        filename, optimized_data, process_info = processed_images[i]
-                        
-                        try:
-                            optimized_size = len(optimized_data)
-                            original_file_size = process_info.get('original_size', optimized_size)
-                            reduction = process_info.get('reduction_percent', 0)
-                            
-                            # Crear BytesIO desde los datos optimizados
-                            from io import BytesIO
-                            img_buffer = BytesIO(optimized_data)
-                            img_buffer.seek(0)
-                            
-                            # Generar nombre único con extensión .jpg (siempre JPG)
-                            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                            unique_filename = f'foto_{campo.id}_{respuesta_formulario.id}_{timestamp}_{i+1}.jpg'
-                            
-                            # Ruta en R2: Formularios/imagenes/nombre_archivo
-                            r2_path = f'Formularios/imagenes/{unique_filename}'
-                            
-                            print(f"DEBUG: Guardando imagen optimizada en R2 como: {r2_path}")
-                            print(f"DEBUG: Tamaño del buffer a subir: {optimized_size} bytes ({optimized_size / 1024 / 1024:.2f} MB)")
-                            
-                            # Verificar que el buffer tenga datos
-                            if optimized_size == 0:
-                                print(f"ERROR: Buffer de imagen está vacío, no se puede subir")
-                                continue
-                            
-                            img_buffer.seek(0)
-                            if upload_file_to_r2(img_buffer, r2_path, content_type='image/jpeg'):
-                                nombres_archivos.append(unique_filename)
-                                print(f"DEBUG: ✅ Archivo guardado exitosamente en R2: {unique_filename}")
-                                print(f"DEBUG: Original: {original_file_size / 1024 / 1024:.2f} MB, Optimizado: {optimized_size / 1024 / 1024:.2f} MB, Reducción: {reduction:.1f}%")
+                            # Subir a R2
+                            try:
+                                optimized_size = len(optimized_data)
                                 
-                                # Verificar que el archivo realmente se subió
-                                if file_exists_in_r2(r2_path):
-                                    print(f"DEBUG: ✅ Verificación: Archivo confirmado en R2: {r2_path}")
+                                # Crear BytesIO desde los datos
+                                from io import BytesIO
+                                img_buffer = BytesIO(optimized_data)
+                                img_buffer.seek(0)
+                                
+                                # Generar nombre único con extensión .jpg (siempre JPG tras procesar)
+                                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                                unique_filename = f'foto_{campo.id}_{respuesta_formulario.id}_{timestamp}_{i+1}.jpg'
+                                
+                                # Ruta en R2: Formularios/imagenes/nombre_archivo
+                                r2_path = f'Formularios/imagenes/{unique_filename}'
+                                
+                                print(f"DEBUG: Guardando imagen en R2 como: {r2_path}")
+                                
+                                img_buffer.seek(0)
+                                if upload_file_to_r2(img_buffer, r2_path, content_type='image/jpeg'):
+                                    nombres_archivos.append(unique_filename)
+                                    print(f"DEBUG: ✅ Archivo guardado exitosamente en R2: {unique_filename}")
                                 else:
-                                    print(f"ERROR: ⚠️ Archivo no encontrado en R2 después de subir: {r2_path}")
-                            else:
-                                print(f"ERROR: ❌ Error al guardar archivo en R2: {unique_filename}")
+                                    print(f"WARNING: ⚠️ Falló subida a R2, intentando fallback Base64")
+                                    # FALLBACK CRÍTICO: Guardar como Base64 si falla R2
+                                    # Esto asegura que no se pierda la foto
+                                    import base64
+                                    # Truncar si es excesivamente grande para no romper la DB
+                                    if len(optimized_data) > 500000: # 500KB límite para base64 en DB
+                                        print("WARNING: Imagen muy grande para Base64, comprimiendo más...")
+                                        try:
+                                            # Re-comprimir fuertemente para fallback
+                                            fallback_img = PILImage.open(BytesIO(optimized_data))
+                                            fallback_buffer = BytesIO()
+                                            fallback_img.save(fallback_buffer, format='JPEG', quality=40)
+                                            optimized_data = fallback_buffer.getvalue()
+                                        except:
+                                            pass
+                                    
+                                    b64_data = base64.b64encode(optimized_data).decode('utf-8')
+                                    # Formato data URI
+                                    data_uri = f"data:image/jpeg;base64,{b64_data}"
+                                    nombres_archivos.append(data_uri)
+                                    print(f"DEBUG: ✅ Imagen guardada como fallback Base64 (len: {len(data_uri)})")
+                                    
+                            except Exception as upload_error:
+                                print(f"ERROR subiendo imagen {archivo.filename}: {upload_error}")
+                                import traceback
+                                traceback.print_exc()
+                                # Intentar fallback Base64 incluso en excepción
+                                try:
+                                    import base64
+                                    b64_data = base64.b64encode(optimized_data).decode('utf-8')
+                                    data_uri = f"data:image/jpeg;base64,{b64_data}"
+                                    nombres_archivos.append(data_uri)
+                                    print(f"DEBUG: ✅ Imagen guardada como fallback Base64 tras excepción")
+                                except:
+                                    print("ERROR: Falló también el fallback Base64")
+                                    continue
                                 
-                        except Exception as img_error:
-                            print(f"ERROR subiendo imagen procesada {filename}: {img_error}")
+                        except Exception as e:
+                            print(f"ERROR general procesando archivo {archivo.filename if archivo else '?'}: {str(e)}")
                             import traceback
                             traceback.print_exc()
-                            flash(f"Error subiendo imagen {filename}: {str(img_error)}", 'error')
                             continue
                     
                     if nombres_archivos:
@@ -4337,32 +4326,61 @@ def generar_pdf_formulario(respuesta_formulario):
                         if not foto_filename:
                             continue
                             
-                        # Buscar foto en R2: Formularios/imagenes/nombre_archivo
-                        r2_foto_path = f'Formularios/imagenes/{foto_filename}'
+                        # Detectar si es Base64 (data URI)
+                        import base64
+                        from io import BytesIO
                         
-                        print(f"DEBUG: Intentando descargar imagen de R2: {r2_foto_path}")
-                        
-                        # Verificar primero si existe en R2
-                        if not file_exists_in_r2(r2_foto_path):
-                            print(f"ERROR: Imagen no encontrada en R2: {r2_foto_path}")
-                            # Intentar también en modo local
-                            from r2_storage import get_local_storage_path
-                            base_path = get_local_storage_path()
-                            local_path = os.path.join(base_path, r2_foto_path)
-                            if os.path.exists(local_path):
-                                print(f"DEBUG: Imagen encontrada en almacenamiento local: {local_path}")
-                                foto_path = local_path
-                            else:
-                                print(f"ERROR: Imagen no encontrada ni en R2 ni localmente: {r2_foto_path}")
+                        if foto_filename.startswith('data:image'):
+                            print(f"DEBUG: Imagen en formato Base64 detectada para índice {idx}")
+                            try:
+                                # Extraer datos base64
+                                if ',' in foto_filename:
+                                    _, encoded = foto_filename.split(',', 1)
+                                else:
+                                    encoded = foto_filename
+                                    
+                                image_bytes = base64.b64decode(encoded)
+                                
+                                # Guardar en archivo temporal
+                                import tempfile
+                                temp_fd, foto_path = tempfile.mkstemp(suffix='.jpg')
+                                os.close(temp_fd)
+                                
+                                with open(foto_path, 'wb') as f:
+                                    f.write(image_bytes)
+                                    
+                                print(f"DEBUG: Imagen Base64 guardada temporalmente: {foto_path}")
+                            except Exception as b64_error:
+                                print(f"ERROR decodificando imagen Base64: {b64_error}")
                                 continue
                         else:
-                            print(f"DEBUG: Imagen existe en R2, descargando...")
-                            # Descargar temporalmente para generar PDF
-                            foto_path = download_to_temp_file(r2_foto_path)
+                            # Buscar foto en R2: Formularios/imagenes/nombre_archivo
+                            r2_foto_path = f'Formularios/imagenes/{foto_filename}'
                             
-                            if not foto_path:
-                                print(f"ERROR: No se pudo descargar imagen de R2: {r2_foto_path}")
-                                continue
+                            print(f"DEBUG: Intentando descargar imagen de R2: {r2_foto_path}")
+                            
+                            # Verificar primero si existe en R2
+                            if not file_exists_in_r2(r2_foto_path):
+                                print(f"ERROR: Imagen no encontrada en R2: {r2_foto_path}")
+                                # Intentar también en modo local
+                                from r2_storage import get_local_storage_path
+                                base_path = get_local_storage_path()
+                                local_path = os.path.join(base_path, r2_foto_path)
+                                if os.path.exists(local_path):
+                                    print(f"DEBUG: Imagen encontrada en almacenamiento local: {local_path}")
+                                    foto_path = local_path
+                                else:
+                                    print(f"ERROR: Imagen no encontrada ni en R2 ni localmente: {r2_foto_path}")
+                                    continue
+                            else:
+                                print(f"DEBUG: Imagen existe en R2, descargando...")
+                                # Descargar temporalmente para generar PDF
+                                foto_path = download_to_temp_file(r2_foto_path)
+                                
+                                if not foto_path:
+                                    print(f"ERROR: No se pudo descargar imagen de R2: {r2_foto_path}")
+                                    continue
+
                         
                         print(f"DEBUG: Imagen descargada exitosamente: {foto_path}")
                         
