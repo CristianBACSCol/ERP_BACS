@@ -194,7 +194,7 @@ class Incidencia(db.Model):
     
     # Relaciones
     tecnico = db.relationship('User', foreign_keys=[tecnico_asignado], backref='incidencias_tecnico', overlaps="incidencias_asignadas")
-    creador = db.relationship('User', foreign_keys=[creado_por], backref='incidencias_creador', overlaps="incidencias_creadas")
+    creador = db.relationship('User', foreign_keys=[creado_por], backref='incidencias_creador', overlaps="incidencias_creadas,usuario_creador")
     cliente = db.relationship('Cliente', back_populates='incidencias')
     sede = db.relationship('Sede', back_populates='incidencias')
     sistema = db.relationship('Sistema', back_populates='incidencias')
@@ -2577,6 +2577,7 @@ def eliminar_formulario(id):
 @login_required
 def diligenciar_formulario(id):
     """Diligenciar un formulario - técnicos y coordinadores"""
+    from image_processor import process_image, is_image_allowed
     # Cargar formulario con campos ordenados
     formulario = Formulario.query.get_or_404(id)
     
@@ -2941,7 +2942,7 @@ def diligenciar_formulario(id):
                                 if foto_file and foto_file.filename:
                                     tiene_datos = True
                                     try:
-                                        from image_processor import process_image, is_image_allowed
+
                                         
                                         if not is_image_allowed(foto_file.filename):
                                             flash(f'Error en el campo "{campo.titulo}": Formato de imagen no permitido en el registro {registro_index + 1}, campo "{campo_config["nombre"]}"', 'error')
