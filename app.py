@@ -4392,10 +4392,10 @@ def generar_pdf_formulario(respuesta_formulario):
                             try:
                                 # Verificar si es una imagen
                                 with PILImage.open(foto_path) as img:
-                                    # OPTIMIZACIÓN: Reducir tamaño de imágenes en PDF para ser más rápido
-                                    # Redimensionar según orientación (4cm = ~113 puntos para PDF más rápido)
-                                    max_width_cm = 4  # cm (reducido de 6cm)
-                                    max_height_cm = 4  # cm (reducido de 6cm)
+                                    # OPTIMIZACIÓN: Resolución mejorada - Permitir imágenes grandes
+                                    # Redimensionar según orientación (16cm ancho página A4 aprox)
+                                    max_width_cm = 16  # cm (aumentado de 4cm para mejor resolución)
+                                    max_height_cm = 20  # cm (permitir verticalidad)
                                     max_width_points = max_width_cm * 28.35  # convertir cm a puntos
                                     max_height_points = max_height_cm * 28.35
                                     
@@ -4403,47 +4403,54 @@ def generar_pdf_formulario(respuesta_formulario):
                                     aspect_ratio = img.width / img.height
                                     
                                     if aspect_ratio > 1.1:  # Horizontal (más ancho que alto)
-                                        # Limitar altura a 4cm
-                                        if img.height > max_height_points:
-                                            ratio = max_height_points / img.height
-                                            new_width = int(img.width * ratio)
-                                            new_height = int(img.height * ratio)
-                                        else:
-                                            new_width = img.width
-                                            new_height = img.height
-                                    elif aspect_ratio < 0.9:  # Vertical (más alto que ancho)
-                                        # Limitar ancho a 4cm
+                                        # Limitar ancho a max_width
                                         if img.width > max_width_points:
-                                            ratio = max_width_points / img.width
-                                            new_width = int(img.width * ratio)
-                                            new_height = int(img.height * ratio)
+                                            new_width = max_width_points
+                                            new_height = new_width / aspect_ratio
                                         else:
                                             new_width = img.width
                                             new_height = img.height
-                                    else:  # Cuadrada (1:1)
-                                        # Limitar a 5x5cm
-                                        max_size_cm = 5
-                                        max_size_points = max_size_cm * 28.35
-                                        if img.width > max_size_points or img.height > max_size_points:
-                                            ratio = min(max_size_points/img.width, max_size_points/img.height)
-                                            new_width = int(img.width * ratio)
-                                            new_height = int(img.height * ratio)
+                                            
+                                        # Verificar que alto no exceda límite
+                                        if new_height > max_height_points:
+                                            ratio = max_height_points / new_height
+                                            new_width = new_width * ratio
+                                            new_height = max_height_points
+                                            
+                                    else:  # Vertical o Cuadrada
+                                        # Limitar ancho a max_width (16cm)
+                                        if img.width > max_width_points:
+                                            new_width = max_width_points
+                                            new_height = new_width / aspect_ratio
                                         else:
                                             new_width = img.width
                                             new_height = img.height
+                                            
+                                        # Verificar que alto no exceda límite
+                                        if new_height > max_height_points:
+                                            ratio = max_height_points / new_height
+                                            new_width = new_width * ratio
+                                            new_height = max_height_points
                                     
-                                    # OPTIMIZACIÓN: Redimensionar imagen antes de agregar al PDF para ser más rápido
-                                    # Redimensionar la imagen físicamente para reducir tamaño del PDF
-                                    if new_width != img.width or new_height != img.height:
-                                        img = img.resize((new_width, new_height), PILImage.Resampling.LANCZOS)
+                                    # Convertir a enteros
+                                    new_width = int(new_width)
+                                    new_height = int(new_height)
                                     
-                                    # Guardar imagen temporalmente con calidad optimizada (no 100% para ser más rápido)
+                                    # IMPORTANTE: NO redimensionar la imagen física (píxeles) a menos que sea GIGANTE (>4000px)
+                                    # Dejar que el PDF maneje la resolución de visualización (width/height en Image())
+                                    # Solo reducir si es extremadamente grande para no explotar memoria
+                                    if img.width > 4000 or img.height > 4000:
+                                        print(f"DEBUG: Reduciendo imagen gigante ({img.size}) para PDF seguro")
+                                        img.thumbnail((3000, 3000), PILImage.Resampling.LANCZOS)
+                                    
+                                    # Guardar imagen temporalmente con ALTA calidad
                                     import tempfile
                                     temp_fd, temp_path = tempfile.mkstemp(suffix=os.path.splitext(foto_filename)[1] or '.jpg')
                                     os.close(temp_fd)
-                                    img.save(temp_path, quality=85, optimize=True)  # Calidad 85 en lugar de 100
+                                    # Calidad 95 para mantener nitidez
+                                    img.save(temp_path, quality=95, optimize=True)
                                     
-                                    # Agregar imagen centrada con borde usando dimensiones calculadas
+                                    # Agregar imagen centrada con borde usando dimensiones calculadas para visualización
                                     pdf_image = Image(temp_path, width=new_width, height=new_height)
                                     
                                     # Crear tabla para centrar la imagen con borde
