@@ -2867,10 +2867,11 @@ def diligenciar_formulario(id):
                                             pass
                                     
                                     b64_data = base64.b64encode(optimized_data).decode('utf-8')
-                                    # Formato data URI
-                                    data_uri = f"data:image/jpeg;base64,{b64_data}"
-                                    nombres_archivos.append(data_uri)
-                                    print(f"DEBUG: ✅ Imagen guardada como fallback Base64 (len: {len(data_uri)})")
+                                    # Formato SEGURO para split(','): BASE64:<data> (sin comas)
+                                    # data:image/jpeg;base64,... contiene una coma que rompe el split después
+                                    safe_b64_str = f"BASE64:{b64_data}"
+                                    nombres_archivos.append(safe_b64_str)
+                                    print(f"DEBUG: ✅ Imagen guardada como fallback Base64 seguro (len: {len(safe_b64_str)})")
                                     
                             except Exception as upload_error:
                                 print(f"ERROR subiendo imagen {archivo.filename}: {upload_error}")
@@ -2880,9 +2881,9 @@ def diligenciar_formulario(id):
                                 try:
                                     import base64
                                     b64_data = base64.b64encode(optimized_data).decode('utf-8')
-                                    data_uri = f"data:image/jpeg;base64,{b64_data}"
-                                    nombres_archivos.append(data_uri)
-                                    print(f"DEBUG: ✅ Imagen guardada como fallback Base64 tras excepción")
+                                    safe_b64_str = f"BASE64:{b64_data}"
+                                    nombres_archivos.append(safe_b64_str)
+                                    print(f"DEBUG: ✅ Imagen guardada como fallback Base64 seguro tras excepción")
                                 except:
                                     print("ERROR: Falló también el fallback Base64")
                                     continue
@@ -4326,15 +4327,17 @@ def generar_pdf_formulario(respuesta_formulario):
                         if not foto_filename:
                             continue
                             
-                        # Detectar si es Base64 (data URI)
+                        # Detectar si es Base64 (data URI o formato BASE64:)
                         import base64
                         from io import BytesIO
                         
-                        if foto_filename.startswith('data:image'):
+                        if foto_filename.startswith('data:image') or foto_filename.startswith('BASE64:'):
                             print(f"DEBUG: Imagen en formato Base64 detectada para índice {idx}")
                             try:
                                 # Extraer datos base64
-                                if ',' in foto_filename:
+                                if foto_filename.startswith('BASE64:'):
+                                    encoded = foto_filename.split(':', 1)[1]
+                                elif ',' in foto_filename:
                                     _, encoded = foto_filename.split(',', 1)
                                 else:
                                     encoded = foto_filename
