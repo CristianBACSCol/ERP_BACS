@@ -13,6 +13,7 @@ psycopg2-binary>=2.9.9  # Para PostgreSQL (Supabase) - usa >= para mejor compati
 # Configuración
 python-dotenv==1.0.0
 
+
 # Generación de PDFs
 reportlab==4.0.4
 
