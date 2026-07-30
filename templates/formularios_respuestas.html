@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+
+{% block title %}Respuestas de Formularios - ERP BACS{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="page-header">
+        <h1>Respuestas de Formularios</h1>
+        <p>Busca, filtra y descarga los formularios diligenciados.</p>
+    </div>
+
+    <div class="filter-card">
+        <form method="get" class="filter-form">
+            <div class="filter-row">
+                <div class="filter-group">
+                    <label for="search">Buscar</label>
+                    <input type="text" id="search" name="search" value="{{ filtros.search }}" placeholder="Formulario o usuario"> 
+                </div>
+                <div class="filter-group">
+                    <label for="formulario">Formulario</label>
+                    <select id="formulario" name="formulario">
+                        <option value="">Todos</option>
+                        {% for formulario in formularios %}
+                        <option value="{{ formulario.id }}" {% if filtros.formulario == formulario.id %}selected{% endif %}>{{ formulario.nombre }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {% if usuarios %}
+                <div class="filter-group">
+                    <label for="usuario">Usuario</label>
+                    <select id="usuario" name="usuario">
+                        <option value="">Todos</option>
+                        {% for usuario in usuarios %}
+                        <option value="{{ usuario.id }}" {% if filtros.usuario == usuario.id %}selected{% endif %}>{{ usuario.nombre }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {% endif %}
+                <div class="filter-group">
+                    <label for="estado">Estado</label>
+                    <select id="estado" name="estado">
+                        <option value="">Todos</option>
+                        {% for est in estados %}
+                        <option value="{{ est }}" {% if filtros.estado == est %}selected{% endif %}>{{ est }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="filter-row">
+                <div class="filter-group">
+                    <label for="fecha_desde">Fecha desde</label>
+                    <input type="date" id="fecha_desde" name="fecha_desde" value="{{ filtros.fecha_desde }}">
+                </div>
+                <div class="filter-group">
+                    <label for="fecha_hasta">Fecha hasta</label>
+                    <input type="date" id="fecha_hasta" name="fecha_hasta" value="{{ filtros.fecha_hasta }}">
+                </div>
+                <div class="filter-actions">
+                    <button type="submit" class="btn btn-primary">Aplicar filtros</button>
+                    <a href="{{ url_for('respuestas_formularios') }}" class="btn btn-secondary">Limpiar</a>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    {% if respuestas %}
+    <div class="table-container">
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Formulario</th>
+                    <th>Diligenciado por</th>
+                    <th>Fecha</th>
+                    <th>Estado</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for respuesta in respuestas %}
+                <tr>
+                    <td>{{ respuesta.id }}</td>
+                    <td>{{ respuesta.formulario.nombre }}</td>
+                    <td>{{ respuesta.usuario.nombre }}</td>
+                    <td>{{ respuesta.fecha_diligenciamiento.strftime('%d/%m/%Y %H:%M') }}</td>
+                    <td>{{ respuesta.estado }}</td>
+                    <td>
+                        <a href="{{ url_for('descargar_formulario_pdf', id=respuesta.id) }}" class="btn btn-sm btn-outline-primary">Descargar</a>
+                        <a href="{{ url_for('diligenciar_formulario', id=respuesta.formulario_id) }}" class="btn btn-sm btn-outline-secondary">Ver formulario</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <div class="empty-icon">
+            <i class="icon-file-text"></i>
+        </div>
+        <h3>No hay respuestas de formularios</h3>
+        <p>No se encontraron formularios diligenciados con los filtros seleccionados.</p>
+    </div>
+    {% endif %}
+</div>
+
+<style>
+.filter-card {
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+.filter-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    margin-bottom: 15px;
+}
+.filter-group {
+    flex: 1 1 220px;
+    min-width: 220px;
+}
+.filter-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+}
+.filter-group input,
+.filter-group select {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #dcdcdc;
+    border-radius: 6px;
+    background: #fafafa;
+}
+.filter-actions {
+    display: flex;
+    align-items: flex-end;
+    gap: 10px;
+}
+.table-container {
+    overflow-x: auto;
+}
+.table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+}
+.table th,
+.table td {
+    padding: 12px 14px;
+    border-bottom: 1px solid #f0f0f0;
+    text-align: left;
+}
+.table th {
+    font-weight: 700;
+    background: #f8f8f8;
+}
+.table-striped tbody tr:nth-child(even) {
+    background: #fcfcfc;
+}
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+</style>
+{% endblock %}

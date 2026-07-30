@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_file, abort, make_response  # type: ignore
 from flask_sqlalchemy import SQLAlchemy  # type: ignore
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user  # type: ignore
+from sqlalchemy import or_
 from werkzeug.security import generate_password_hash, check_password_hash  # type: ignore
 from werkzeug.utils import secure_filename  # type: ignore
 from datetime import datetime
@@ -2490,6 +2491,69 @@ def formularios():
         # Los técnicos y coordinadores ven solo los formularios disponibles para diligenciar
         formularios = Formulario.query.filter_by(activo=True).order_by(Formulario.nombre).all()
         return render_template('formularios_usuario.html', formularios=formularios)
+
+@app.route('/formularios/respuestas')
+@login_required
+def respuestas_formularios():
+    """Listar y buscar respuestas de formularios diligenciados."""
+    query = RespuestaFormulario.query
+
+    if current_user.rol.nombre not in ['Administrador', 'Coordinador']:
+        query = query.filter(RespuestaFormulario.diligenciado_por == current_user.id)
+
+    formulario_id = request.args.get('formulario', type=int)
+    usuario_id = request.args.get('usuario', type=int)
+    estado = request.args.get('estado', '').strip()
+    fecha_desde = request.args.get('fecha_desde', '').strip()
+    fecha_hasta = request.args.get('fecha_hasta', '').strip()
+    search = request.args.get('search', '').strip()
+
+    if formulario_id:
+        query = query.filter(RespuestaFormulario.formulario_id == formulario_id)
+
+    if usuario_id and current_user.rol.nombre in ['Administrador', 'Coordinador']:
+        query = query.filter(RespuestaFormulario.diligenciado_por == usuario_id)
+
+    if estado:
+        query = query.filter(RespuestaFormulario.estado == estado)
+
+    if fecha_desde:
+        try:
+            desde = datetime.strptime(fecha_desde, '%Y-%m-%d')
+            query = query.filter(RespuestaFormulario.fecha_diligenciamiento >= desde)
+        except ValueError:
+            pass
+
+    if fecha_hasta:
+        try:
+            hasta = datetime.strptime(fecha_hasta, '%Y-%m-%d')
+            query = query.filter(RespuestaFormulario.fecha_diligenciamiento <= hasta)
+        except ValueError:
+            pass
+
+    if search:
+        query = query.join(Formulario).join(User, RespuestaFormulario.diligenciado_por == User.id).filter(
+            or_(Formulario.nombre.ilike(f'%{search}%'), User.nombre.ilike(f'%{search}%'))
+        )
+
+    respuestas = query.order_by(RespuestaFormulario.fecha_diligenciamiento.desc()).all()
+    formularios = Formulario.query.order_by(Formulario.nombre).all()
+    usuarios = User.query.order_by(User.nombre).all() if current_user.rol.nombre in ['Administrador', 'Coordinador'] else []
+    estados = ['Completado', 'Borrador']
+
+    return render_template('formularios_respuestas.html',
+                           respuestas=respuestas,
+                           formularios=formularios,
+                           usuarios=usuarios,
+                           estados=estados,
+                           filtros={
+                               'formulario': formulario_id,
+                               'usuario': usuario_id,
+                               'estado': estado,
+                               'fecha_desde': fecha_desde,
+                               'fecha_hasta': fecha_hasta,
+                               'search': search
+                           })
 
 @app.route('/formularios/nuevo', methods=['GET', 'POST'])
 @login_required
