@@ -19,11 +19,10 @@
       "dest": "/api/index.py"
     }
   ],
-  "functions": {
-    "api/*.py": {
-      "runtime": "vercel-python@0.4.0",
-      "maxDuration": 30,
-      "memory": 1024
+  "builds": [
+    {
+      "src": "api/index.py",
+      "use": "@vercel/python"
     }
-  }
+  ]
 }
