@@ -4,6 +4,8 @@ Este archivo permite ejecutar la aplicación Flask en Vercel
 """
 import sys
 import os
+from flask import Flask
+import traceback
 
 # Asegurar que el directorio raíz esté en el path
 root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -15,19 +17,20 @@ try:
 except Exception as e:
     print(f"Warning: No se pudo cambiar directorio: {e}")
 
-# Importar la aplicación Flask con manejo de errores
+# Definir app a nivel superior para que Vercel lo detecte
+app = None
 import_error = None
 try:
-    from app import app
+    from app import app as flask_app
+    app = flask_app
     print("✅ Aplicación Flask importada correctamente")
 except Exception as e:
     import_error = str(e)
     print(f"❌ Error importando aplicación Flask: {e}")
-    import traceback
     traceback.print_exc()
     # Crear una app Flask mínima para evitar errores
-    from flask import Flask
     app = Flask(__name__)
+
     @app.route('/')
     def error():
         error_msg = import_error if import_error else "Error desconocido al cargar la aplicación"
