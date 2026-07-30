@@ -22,6 +22,7 @@
                     <li><a href="{{ url_for('dashboard') }}">Dashboard</a></li>
                     <li><a href="{{ url_for('incidencias') }}">Incidencias</a></li>
                     <li><a href="{{ url_for('formularios') }}">Formularios</a></li>
+                    <li><a href="{{ url_for('respuestas_formularios') }}">Respuestas</a></li>
                     {% if current_user.rol.nombre == 'Administrador' %}
                     <li><a href="{{ url_for('clientes') }}">Clientes</a></li>
                     <li><a href="{{ url_for('sistemas') }}">Sistemas</a></li>
@@ -55,6 +56,7 @@
                 <li><a href="{{ url_for('dashboard') }}" onclick="closeMobileMenu()">Dashboard</a></li>
                 <li><a href="{{ url_for('incidencias') }}" onclick="closeMobileMenu()">Incidencias</a></li>
                 <li><a href="{{ url_for('formularios') }}" onclick="closeMobileMenu()">Formularios</a></li>
+                <li><a href="{{ url_for('respuestas_formularios') }}" onclick="closeMobileMenu()">Respuestas</a></li>
                 {% if current_user.rol.nombre == 'Administrador' %}
                 <li><a href="{{ url_for('clientes') }}" onclick="closeMobileMenu()">Clientes</a></li>
                 <li><a href="{{ url_for('sistemas') }}" onclick="closeMobileMenu()">Sistemas</a></li>

@@ -35,7 +35,20 @@ document.addEventListener('DOMContentLoaded', function() {
     inicializarFirmas();
     inicializarPreviewsFotos();
     inicializarSeleccionMultiple();
+    setFechaDiligenciamientoLocal();
 });
+
+function setFechaDiligenciamientoLocal() {
+    const fechaInput = document.getElementById('fecha_diligenciamiento_local');
+    if (!fechaInput) {
+        return;
+    }
+
+    const pad = (value) => String(value).padStart(2, '0');
+    const ahora = new Date();
+    const fechaLocal = `${ahora.getFullYear()}-${pad(ahora.getMonth() + 1)}-${pad(ahora.getDate())} ${pad(ahora.getHours())}:${pad(ahora.getMinutes())}:${pad(ahora.getSeconds())}`;
+    fechaInput.value = fechaLocal;
+}
 
 function inicializarFirmas() {
     document.querySelectorAll('.firma-canvas').forEach(canvas => {
@@ -1008,24 +1021,7 @@ if (formulario) {
             }
         });
         
-        console.log('DEBUG: Todas las firmas procesadas, enviando formulario...');
-    });
-}
-
-// Funciones para registro repetible
-function agregarRegistro(campoId) {
-    const lista = document.getElementById(`registros_${campoId}`);
-    if (!lista) {
-        console.error(`No se encontró la lista de registros para campo ${campoId}`);
-        return;
-    }
-    
-    // Obtener la configuración de campos desde el contenedor del registro repetible
-    const container = document.querySelector(`.registro-repetible-container[data-campo-id="${campoId}"]`);
-    if (!container) {
-        console.error(`No se encontró el contenedor de registro repetible para campo ${campoId}`);
-        return;
-    }
+        setFechaDiligenciamientoLocal();
     
     const configuracionStr = container.getAttribute('data-configuracion');
     let camposConfig = [];

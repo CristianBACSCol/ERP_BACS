@@ -2655,11 +2655,20 @@ def diligenciar_formulario(id):
         return redirect(url_for('formularios'))
     
     if request.method == 'POST':
-        # Crear respuesta del formulario
+        fecha_diligenciamiento_local = request.form.get('fecha_diligenciamiento_local', '').strip()
+        fecha_local = None
+        if fecha_diligenciamiento_local:
+            try:
+                fecha_local = datetime.strptime(fecha_diligenciamiento_local, '%Y-%m-%d %H:%M:%S')
+            except ValueError:
+                fecha_local = None
+
+        # Crear respuesta del formulario usando la hora local del dispositivo cuando esté disponible
         respuesta_formulario = RespuestaFormulario(
             formulario_id=id,
             diligenciado_por=current_user.id,
-            estado='Completado'
+            estado='Completado',
+            fecha_diligenciamiento=fecha_local if fecha_local else datetime.utcnow()
         )
         
         try:

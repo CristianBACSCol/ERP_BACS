@@ -13,6 +13,7 @@
 
     <div class="form-container">
         <form method="POST" enctype="multipart/form-data" class="form" id="formularioDiligenciar">
+            <input type="hidden" id="fecha_diligenciamiento_local" name="fecha_diligenciamiento_local" value="">
             {% for campo in formulario.campos %}
             <div class="form-group campo-formulario" data-campo-id="{{ campo.id }}" data-tipo="{{ campo.tipo_campo }}">
                 {% if campo.tipo_campo == 'texto_informativo' %}
