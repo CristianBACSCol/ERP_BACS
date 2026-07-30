@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_file, abort, make_response  # type: ignore
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_file, abort, make_response, send_from_directory  # type: ignore
 from flask_sqlalchemy import SQLAlchemy  # type: ignore
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user  # type: ignore
 from sqlalchemy import or_
@@ -63,6 +63,11 @@ try:
     os.makedirs('files', exist_ok=True)
 except Exception as e:
     print(f"Warning: No se pudo crear directorio files: {e}")
+
+# Ruta para servir archivos estáticos desde la carpeta static
+@app.route('/static/<path:filename>')
+def static_files(filename):
+    return send_from_directory('static', filename)
 
 # Ruta para servir archivos estáticos desde la carpeta files
 @app.route('/files/<filename>')

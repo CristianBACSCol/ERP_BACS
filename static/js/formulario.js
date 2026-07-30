@@ -79,8 +79,8 @@ function inicializarFirmas() {
             console.error('ERROR: No se pudo obtener contexto 2D para el canvas de firma', canvas);
             return;
         }
-        ctx.setTransform(dpi, 0, 0, dpi, 0, 0);
-        
+        ctx.scale(dpi, dpi);
+
         // Configurar canvas
         ctx.strokeStyle = '#000';
         ctx.lineWidth = 2;
@@ -89,9 +89,7 @@ function inicializarFirmas() {
         // Escala entre tamaño visual (CSS) y resolución interna del canvas
         function getScale() {
             const rect = canvas.getBoundingClientRect();
-            const scaleX = canvas.width / rect.width;
-            const scaleY = canvas.height / rect.height;
-            return { rect, scaleX, scaleY };
+            return { rect, scaleX: 1, scaleY: 1 };
         }
         
         let isDrawing = false;
