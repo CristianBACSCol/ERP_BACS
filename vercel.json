@@ -12,7 +12,7 @@
     },
     {
       "src": "/files/(.*)",
-      "dest": "/files/$1"
+      "dest": "/api/index.py"
     },
     {
       "src": "/(.*)",
