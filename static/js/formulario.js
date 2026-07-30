@@ -51,9 +51,35 @@ function setFechaDiligenciamientoLocal() {
 }
 
 function inicializarFirmas() {
-    document.querySelectorAll('.firma-canvas').forEach(canvas => {
-        const campoId = canvas.id.split('_')[1];
+    const canvases = document.querySelectorAll('.firma-canvas');
+    console.log('DEBUG: firma canvases encontrados', canvases.length);
+    if (canvases.length === 0) {
+        console.warn('WARNING: No se encontraron elementos .firma-canvas en la página');
+    }
+    canvases.forEach(canvas => {
+        canvas.style.display = 'block';
+        canvas.style.visibility = 'visible';
+        canvas.style.pointerEvents = 'auto';
+        canvas.style.background = '#fff';
+        canvas.style.width = '100%';
+        canvas.style.height = '200px';
+        canvas.style.minHeight = '200px';
+
+        const rect = canvas.getBoundingClientRect();
+        const dpi = window.devicePixelRatio || 1;
+        const width = Math.max(300, rect.width || 300);
+        const height = 200;
+        canvas.width = width * dpi;
+        canvas.height = height * dpi;
+        canvas.style.width = `${width}px`;
+        canvas.style.height = `${height}px`;
+
         const ctx = canvas.getContext('2d');
+        if (!ctx) {
+            console.error('ERROR: No se pudo obtener contexto 2D para el canvas de firma', canvas);
+            return;
+        }
+        ctx.setTransform(dpi, 0, 0, dpi, 0, 0);
         
         // Configurar canvas
         ctx.strokeStyle = '#000';
