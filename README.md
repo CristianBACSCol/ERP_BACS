@@ -3,7 +3,7 @@
 ## 📋 Descripción del Sistema
 
 El ERP BACS es un sistema de gestión empresarial desarrollado específicamente para la empresa BACS (Building Automation and Control System SAS). Este sistema permite la gestión integral de incidencias técnicas, clientes, usuarios, sedes y sistemas, proporcionando una plataforma centralizada para el seguimiento y resolución de problemas técnicos.
-
+.
 ## 🛠️ Stack Tecnológico
 
 | Categoría | Tecnología | Versión | Uso en el Proyecto |
