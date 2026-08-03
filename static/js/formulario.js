@@ -64,39 +64,45 @@ function inicializarFirmas() {
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
         
+        canvas.style.touchAction = 'none';
+        canvas.style.pointerEvents = 'auto';
+        
         let isDrawing = false;
         
         function getPos(e) {
             const rect = canvas.getBoundingClientRect();
-            let clientX = e.clientX;
-            let clientY = e.clientY;
-            
-            if (e.touches && e.touches.length > 0) {
-                clientX = e.touches[0].clientX;
-                clientY = e.touches[0].clientY;
-            }
-            
             const scaleX = rect.width ? (canvas.width / rect.width) : 1;
             const scaleY = rect.height ? (canvas.height / rect.height) : 1;
             
-            return {
-                x: (clientX - rect.left) * scaleX,
-                y: (clientY - rect.top) * scaleY
-            };
+            if (e.touches && e.touches.length > 0) {
+                return {
+                    x: (e.touches[0].clientX - rect.left) * scaleX,
+                    y: (e.touches[0].clientY - rect.top) * scaleY
+                };
+            } else {
+                // Mouse fallback robusto
+                const x = e.offsetX !== undefined ? e.offsetX : (e.clientX - rect.left);
+                const y = e.offsetY !== undefined ? e.offsetY : (e.clientY - rect.top);
+                return {
+                    x: x * scaleX,
+                    y: y * scaleY
+                };
+            }
         }
         
         function startDrawing(e) {
-            if (e.type.includes('touch')) e.preventDefault();
+            e.preventDefault(); // Previene selección de texto en PC y scroll en móvil
             isDrawing = true;
             const pos = getPos(e);
             ctx.beginPath();
             ctx.moveTo(pos.x, pos.y);
+            // Dibujar un punto para toques simples
             ctx.lineTo(pos.x, pos.y);
             ctx.stroke();
         }
         
         function draw(e) {
-            if (e.type.includes('touch')) e.preventDefault();
+            e.preventDefault();
             if (!isDrawing) return;
             const pos = getPos(e);
             ctx.lineTo(pos.x, pos.y);
@@ -104,6 +110,7 @@ function inicializarFirmas() {
         }
         
         function stopDrawing(e) {
+            e.preventDefault();
             if (isDrawing) {
                 ctx.stroke();
                 ctx.closePath();
