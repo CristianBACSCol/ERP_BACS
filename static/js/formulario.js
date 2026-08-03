@@ -52,85 +52,73 @@ function setFechaDiligenciamientoLocal() {
 
 function inicializarFirmas() {
     const canvases = document.querySelectorAll('.firma-canvas');
-    console.log('DEBUG: firma canvases encontrados', canvases.length);
-    if (canvases.length === 0) {
-        console.warn('WARNING: No se encontraron elementos .firma-canvas en la página');
-    }
+    if (canvases.length === 0) return;
+    
     canvases.forEach(canvas => {
         const campoId = canvas.id.includes('_') ? canvas.id.split('_')[1] : canvas.id;
-        
         const ctx = canvas.getContext('2d');
-        if (!ctx) {
-            console.error('ERROR: No se pudo obtener contexto 2D para el canvas de firma', canvas);
-            return;
-        }
-
-        // Configurar canvas
-        ctx.strokeStyle = '#000';
-        ctx.lineWidth = 2;
+        if (!ctx) return;
+        
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 3;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
         
-        // Escala entre tamaño visual (CSS) y resolución interna del canvas
-        function getScale() {
-            const rect = canvas.getBoundingClientRect();
-            const scaleX = rect.width ? (canvas.width / rect.width) : 1;
-            const scaleY = rect.height ? (canvas.height / rect.height) : 1;
-            return { rect, scaleX, scaleY };
-        }
-        
         let isDrawing = false;
         
-        // Eventos del mouse
-        canvas.addEventListener('mousedown', function(e) {
+        function getPos(e) {
+            const rect = canvas.getBoundingClientRect();
+            let clientX = e.clientX;
+            let clientY = e.clientY;
+            
+            if (e.touches && e.touches.length > 0) {
+                clientX = e.touches[0].clientX;
+                clientY = e.touches[0].clientY;
+            }
+            
+            const scaleX = rect.width ? (canvas.width / rect.width) : 1;
+            const scaleY = rect.height ? (canvas.height / rect.height) : 1;
+            
+            return {
+                x: (clientX - rect.left) * scaleX,
+                y: (clientY - rect.top) * scaleY
+            };
+        }
+        
+        function startDrawing(e) {
+            if (e.type.includes('touch')) e.preventDefault();
             isDrawing = true;
-            const { rect, scaleX, scaleY } = getScale();
-            const x = (e.clientX - rect.left) * scaleX;
-            const y = (e.clientY - rect.top) * scaleY;
+            const pos = getPos(e);
             ctx.beginPath();
-            ctx.moveTo(x, y);
-        });
-        
-        canvas.addEventListener('mousemove', function(e) {
-            if (!isDrawing) return;
-            const { rect, scaleX, scaleY } = getScale();
-            const x = (e.clientX - rect.left) * scaleX;
-            const y = (e.clientY - rect.top) * scaleY;
-            ctx.lineTo(x, y);
+            ctx.moveTo(pos.x, pos.y);
+            ctx.lineTo(pos.x, pos.y);
             ctx.stroke();
-        });
+        }
         
-        canvas.addEventListener('mouseup', function() {
-            isDrawing = false;
-        });
-        
-        // Eventos táctiles para dispositivos móviles
-        canvas.addEventListener('touchstart', function(e) {
-            e.preventDefault();
-            isDrawing = true;
-            const { rect, scaleX, scaleY } = getScale();
-            const touch = e.touches[0];
-            const x = (touch.clientX - rect.left) * scaleX;
-            const y = (touch.clientY - rect.top) * scaleY;
-            ctx.beginPath();
-            ctx.moveTo(x, y);
-        });
-        
-        canvas.addEventListener('touchmove', function(e) {
-            e.preventDefault();
+        function draw(e) {
+            if (e.type.includes('touch')) e.preventDefault();
             if (!isDrawing) return;
-            const { rect, scaleX, scaleY } = getScale();
-            const touch = e.touches[0];
-            const x = (touch.clientX - rect.left) * scaleX;
-            const y = (touch.clientY - rect.top) * scaleY;
-            ctx.lineTo(x, y);
+            const pos = getPos(e);
+            ctx.lineTo(pos.x, pos.y);
             ctx.stroke();
-        });
+        }
         
-        canvas.addEventListener('touchend', function(e) {
-            e.preventDefault();
-            isDrawing = false;
-        });
+        function stopDrawing(e) {
+            if (isDrawing) {
+                ctx.stroke();
+                ctx.closePath();
+                isDrawing = false;
+            }
+        }
+        
+        canvas.addEventListener('mousedown', startDrawing);
+        canvas.addEventListener('mousemove', draw);
+        canvas.addEventListener('mouseup', stopDrawing);
+        canvas.addEventListener('mouseleave', stopDrawing);
+        
+        canvas.addEventListener('touchstart', startDrawing, {passive: false});
+        canvas.addEventListener('touchmove', draw, {passive: false});
+        canvas.addEventListener('touchend', stopDrawing);
         
         firmas[campoId] = ctx;
     });
