@@ -87,7 +87,7 @@
                     <td>{{ respuesta.estado }}</td>
                     <td>
                         <a href="{{ url_for('descargar_formulario_pdf', id=respuesta.id) }}" class="btn btn-sm btn-outline-primary">Descargar</a>
-                        <a href="{{ url_for('diligenciar_formulario', id=respuesta.formulario_id) }}" class="btn btn-sm btn-outline-secondary">Ver formulario</a>
+                        <a href="{{ url_for('descargar_formulario_pdf', id=respuesta.id) }}" class="btn btn-sm btn-outline-secondary">Ver formulario</a>
                     </td>
                 </tr>
                 {% endfor %}
