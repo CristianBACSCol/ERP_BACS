@@ -57,6 +57,7 @@ function inicializarFirmas() {
         console.warn('WARNING: No se encontraron elementos .firma-canvas en la página');
     }
     canvases.forEach(canvas => {
+        const campoId = canvas.id.includes('_') ? canvas.id.split('_')[1] : canvas.id;
         canvas.style.display = 'block';
         canvas.style.visibility = 'visible';
         canvas.style.pointerEvents = 'auto';
@@ -79,17 +80,19 @@ function inicializarFirmas() {
             console.error('ERROR: No se pudo obtener contexto 2D para el canvas de firma', canvas);
             return;
         }
-        ctx.scale(dpi, dpi);
 
-        // Configurar canvas
+        // Configurar canvas (escalando el grosor según DPI)
         ctx.strokeStyle = '#000';
-        ctx.lineWidth = 2;
+        ctx.lineWidth = 2 * dpi;
         ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
         
         // Escala entre tamaño visual (CSS) y resolución interna del canvas
         function getScale() {
             const rect = canvas.getBoundingClientRect();
-            return { rect, scaleX: 1, scaleY: 1 };
+            const scaleX = rect.width ? (canvas.width / rect.width) : 1;
+            const scaleY = rect.height ? (canvas.height / rect.height) : 1;
+            return { rect, scaleX, scaleY };
         }
         
         let isDrawing = false;
