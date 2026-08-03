@@ -56,77 +56,103 @@ function inicializarFirmas() {
     
     canvases.forEach(canvas => {
         const campoId = canvas.id.includes('_') ? canvas.id.split('_')[1] : canvas.id;
+        // Preparar contexto y escalado HiDPI
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
-        
+
+        // Ajustar pixel ratio para evitar distorsión y problemas de coordenadas
+        function resizeCanvasToDisplaySize() {
+            const ratio = window.devicePixelRatio || 1;
+            const rect = canvas.getBoundingClientRect();
+            const desiredWidth = Math.round(rect.width * ratio);
+            const desiredHeight = Math.round(rect.height * ratio);
+            if (canvas.width !== desiredWidth || canvas.height !== desiredHeight) {
+                canvas.width = desiredWidth;
+                canvas.height = desiredHeight;
+                ctx.scale(ratio, ratio);
+            }
+        }
+
+        // Aplicar estilos y propiedades iniciales
         ctx.strokeStyle = '#000000';
         ctx.lineWidth = 3;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
-        
         canvas.style.touchAction = 'none';
         canvas.style.pointerEvents = 'auto';
-        
-        let isDrawing = false;
-        
-        function getPos(e) {
+
+        // Función para obtener posición adaptada a HiDPI
+        function getPosFromEvent(e) {
             const rect = canvas.getBoundingClientRect();
-            const scaleX = rect.width ? (canvas.width / rect.width) : 1;
-            const scaleY = rect.height ? (canvas.height / rect.height) : 1;
-            
+            const ratio = (window.devicePixelRatio || 1);
             if (e.touches && e.touches.length > 0) {
-                return {
-                    x: (e.touches[0].clientX - rect.left) * scaleX,
-                    y: (e.touches[0].clientY - rect.top) * scaleY
-                };
-            } else {
-                // Mouse fallback robusto
-                const x = e.offsetX !== undefined ? e.offsetX : (e.clientX - rect.left);
-                const y = e.offsetY !== undefined ? e.offsetY : (e.clientY - rect.top);
-                return {
-                    x: x * scaleX,
-                    y: y * scaleY
-                };
+                return { x: (e.touches[0].clientX - rect.left), y: (e.touches[0].clientY - rect.top) };
             }
+            if (e.clientX !== undefined && e.clientY !== undefined) {
+                return { x: (e.clientX - rect.left), y: (e.clientY - rect.top) };
+            }
+            if (e.offsetX !== undefined && e.offsetY !== undefined) {
+                return { x: e.offsetX, y: e.offsetY };
+            }
+            return { x: 0, y: 0 };
         }
-        
+
+        // Estado de dibujo
+        let isDrawing = false;
+
+        // Handlers principales
         function startDrawing(e) {
-            e.preventDefault(); // Previene selección de texto en PC y scroll en móvil
+            // console.log para/debug
+            console.log('DEBUG firma start', campoId, e.type);
+            if (e.preventDefault) e.preventDefault();
             isDrawing = true;
-            const pos = getPos(e);
+            const pos = getPosFromEvent(e);
             ctx.beginPath();
             ctx.moveTo(pos.x, pos.y);
-            // Dibujar un punto para toques simples
             ctx.lineTo(pos.x, pos.y);
             ctx.stroke();
         }
-        
+
         function draw(e) {
-            e.preventDefault();
+            if (e.preventDefault) e.preventDefault();
             if (!isDrawing) return;
-            const pos = getPos(e);
+            const pos = getPosFromEvent(e);
             ctx.lineTo(pos.x, pos.y);
             ctx.stroke();
         }
-        
+
         function stopDrawing(e) {
-            e.preventDefault();
+            console.log('DEBUG firma stop', campoId, e.type);
+            if (e.preventDefault) e.preventDefault();
             if (isDrawing) {
                 ctx.stroke();
                 ctx.closePath();
                 isDrawing = false;
             }
         }
-        
-        canvas.addEventListener('mousedown', startDrawing);
-        canvas.addEventListener('mousemove', draw);
-        canvas.addEventListener('mouseup', stopDrawing);
-        canvas.addEventListener('mouseleave', stopDrawing);
-        
-        canvas.addEventListener('touchstart', startDrawing, {passive: false});
-        canvas.addEventListener('touchmove', draw, {passive: false});
-        canvas.addEventListener('touchend', stopDrawing);
-        
+
+        // Redimensionar al cargar y cuando cambie tamaño de ventana
+        resizeCanvasToDisplaySize();
+        window.addEventListener('resize', resizeCanvasToDisplaySize);
+
+        // Preferir PointerEvents si están disponibles (unifican mouse/touch/pen)
+        if (window.PointerEvent) {
+            canvas.addEventListener('pointerdown', startDrawing);
+            canvas.addEventListener('pointermove', draw);
+            window.addEventListener('pointerup', stopDrawing);
+            canvas.addEventListener('pointerleave', stopDrawing);
+        } else {
+            // Fallback a mouse y touch
+            canvas.addEventListener('mousedown', startDrawing);
+            canvas.addEventListener('mousemove', draw);
+            window.addEventListener('mouseup', stopDrawing);
+            canvas.addEventListener('mouseleave', stopDrawing);
+
+            canvas.addEventListener('touchstart', startDrawing, {passive: false});
+            canvas.addEventListener('touchmove', draw, {passive: false});
+            canvas.addEventListener('touchend', stopDrawing);
+        }
+
         firmas[campoId] = ctx;
     });
 }
