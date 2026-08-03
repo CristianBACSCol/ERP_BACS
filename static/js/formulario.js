@@ -1093,7 +1093,13 @@ if (formulario) {
         });
         
         setFechaDiligenciamientoLocal();
-    
+    });
+}
+
+function agregarRegistro(campoId) {
+    const container = document.querySelector(`.registro-repetible-container[data-campo-id="${campoId}"]`);
+    if (!container) return;
+    const lista = container.querySelector('.registros-lista');
     const configuracionStr = container.getAttribute('data-configuracion');
     let camposConfig = [];
     
