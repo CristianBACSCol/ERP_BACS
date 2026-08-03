@@ -53,7 +53,25 @@ function setFechaDiligenciamientoLocal() {
 function inicializarFirmas() {
     const canvases = document.querySelectorAll('.firma-canvas');
     if (canvases.length === 0) return;
-    
+    // Logs globales para depuración: qué elemento recibe pointerdown/move/up
+    if (window.PointerEvent && !window.__firma_global_pointer_logs_installed) {
+        window.__firma_global_pointer_logs_installed = true;
+        document.addEventListener('pointerdown', (e) => {
+            try {
+                console.log('GLOBAL pointerdown target=', e.target.tagName, 'id=', e.target.id, 'class=', e.target.className, 'pointerType=', e.pointerType);
+            } catch (err) {}
+        }, {capture: true});
+        document.addEventListener('pointermove', (e) => {
+            // comentar por alto volumen si es necesario
+            // console.log('GLOBAL pointermove target=', e.target.tagName, 'pointerType=', e.pointerType);
+        }, {capture: true});
+        document.addEventListener('pointerup', (e) => {
+            try {
+                console.log('GLOBAL pointerup target=', e.target.tagName, 'id=', e.target.id, 'pointerType=', e.pointerType);
+            } catch (err) {}
+        }, {capture: true});
+    }
+
     canvases.forEach(canvas => {
         const campoId = canvas.id.includes('_') ? canvas.id.split('_')[1] : canvas.id;
         // Preparar contexto y escalado HiDPI
@@ -103,8 +121,17 @@ function inicializarFirmas() {
         // Handlers principales
         function startDrawing(e) {
             // console.log para/debug
-            console.log('DEBUG firma start', campoId, e.type);
+            console.log('DEBUG firma start', campoId, e.type, 'pointerType=' + (e.pointerType || 'n/a'));
             if (e.preventDefault) e.preventDefault();
+            // Asegurar captura del puntero para evitar pérdida de eventos
+            try {
+                if (typeof e.pointerId !== 'undefined' && canvas.setPointerCapture) {
+                    canvas.setPointerCapture(e.pointerId);
+                    console.log('DEBUG firma: setPointerCapture', e.pointerId);
+                }
+            } catch (err) {
+                console.warn('DEBUG firma: setPointerCapture error', err);
+            }
             isDrawing = true;
             const pos = getPosFromEvent(e);
             ctx.beginPath();
@@ -122,8 +149,17 @@ function inicializarFirmas() {
         }
 
         function stopDrawing(e) {
-            console.log('DEBUG firma stop', campoId, e.type);
-            if (e.preventDefault) e.preventDefault();
+            console.log('DEBUG firma stop', campoId, e ? e.type : 'manual');
+            if (e && e.preventDefault) e.preventDefault();
+            // Liberar captura del puntero
+            try {
+                if (e && typeof e.pointerId !== 'undefined' && canvas.releasePointerCapture) {
+                    canvas.releasePointerCapture(e.pointerId);
+                    console.log('DEBUG firma: releasePointerCapture', e.pointerId);
+                }
+            } catch (err) {
+                console.warn('DEBUG firma: releasePointerCapture error', err);
+            }
             if (isDrawing) {
                 ctx.stroke();
                 ctx.closePath();
@@ -134,6 +170,9 @@ function inicializarFirmas() {
         // Redimensionar al cargar y cuando cambie tamaño de ventana
         resizeCanvasToDisplaySize();
         window.addEventListener('resize', resizeCanvasToDisplaySize);
+
+        // Asegurar que el canvas esté por encima y pueda recibir eventos
+        try { canvas.style.position = canvas.style.position || 'relative'; canvas.style.zIndex = 9999; } catch (e) {}
 
         // Preferir PointerEvents si están disponibles (unifican mouse/touch/pen)
         if (window.PointerEvent) {
